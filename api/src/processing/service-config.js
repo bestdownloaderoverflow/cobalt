@@ -81,6 +81,13 @@ export const services = {
             "audio/listen/:audioId",
         ]
     },
+    goo: {
+        patterns: [
+            ":id"
+        ],
+        subdomains: ["maps.app"],
+        tld: "gl"
+    },
     reddit: {
         patterns: [
             "comments/:id",

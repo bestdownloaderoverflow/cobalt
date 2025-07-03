@@ -30,6 +30,7 @@ import facebook from "./services/facebook.js";
 import bluesky from "./services/bluesky.js";
 import xiaohongshu from "./services/xiaohongshu.js";
 import newgrounds from "./services/newgrounds.js";
+import maps from './services/maps.js';
 
 let freebind;
 
@@ -266,6 +267,12 @@ export default async function({ host, patternMatch, params, authType }) {
                     h265: params.allowH265,
                     isAudioOnly,
                     dispatcher,
+                });
+                break;
+            
+            case "goo":
+                r = await maps({
+                    ...patternMatch
                 });
                 break;
 

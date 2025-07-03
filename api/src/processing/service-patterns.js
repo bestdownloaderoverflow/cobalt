@@ -87,4 +87,20 @@ export const testers = {
 
     "youtube": pattern =>
         pattern.id?.length <= 11,
+
+    "facebook": pattern =>
+        pattern.shortLink?.length <= 11
+        || pattern.username?.length <= 30
+        || pattern.caption?.length <= 255
+        || pattern.id?.length <= 20 && !pattern.shareType
+        || pattern.id?.length <= 20 && pattern.shareType?.length === 1,
+
+    "bsky": pattern =>
+        pattern.user?.length <= 128 && pattern.post?.length <= 128,
+
+    "xiaohongshu": pattern =>
+        pattern.id?.length <= 24 && pattern.token?.length <= 64
+        || pattern.shareId?.length <= 24,
+    
+    "goo": pattern => pattern.id.length == 17,
 }

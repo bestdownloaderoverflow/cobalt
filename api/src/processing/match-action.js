@@ -181,6 +181,7 @@ export default function({
                 case "ok":
                 case "xiaohongshu":
                 case "newgrounds":
+                case "goo":
                     params = { type: "proxy" };
                     break;
 
