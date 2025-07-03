@@ -1,0 +1,39 @@
+[
+	{
+		"name": "ios: video link",
+		"url": "https://maps.app.goo.gl/NtcC7NQ4mogPBWxB6",
+		"params": {},
+		"expected": {
+			"code": 200,
+			"status": "tunnel"
+		}
+	},
+	{
+		"name": "ios: photo link",
+		"url": "https://maps.app.goo.gl/5y2C61pY3bhpxhND7",
+		"params": {},
+		"expected": {
+			"code": 200,
+			"status": "tunnel"
+		}
+	},
+	{
+		"name": "web: photo link",
+		"url": "https://maps.app.goo.gl/eHnY3ejH8Skt9x4q7",
+		"params": {},
+		"expected": {
+			"code": 200,
+			"status": "tunnel"
+		}
+	},
+	{
+		"name": "web: video link",
+		"url": "https://maps.app.goo.gl/82s3dGtXuni76Q728",
+		"params": {},
+		"expected": {
+			"code": 200,
+			"status": "tunnel"
+		}
+	}
+
+]
