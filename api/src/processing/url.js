@@ -117,6 +117,12 @@ function aliasURL(url) {
                 url = new URL(`https://www.reddit.com/video/${parts[1]}`);
             }
             break;
+
+        case "goo":
+            if (url.hostname == "maps.app.goo.gl") {
+                url.hostname = "maps.undefined";
+            }
+            break;
     }
 
     return url;

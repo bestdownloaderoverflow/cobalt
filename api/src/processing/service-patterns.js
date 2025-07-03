@@ -102,5 +102,5 @@ export const testers = {
         pattern.id?.length <= 24 && pattern.token?.length <= 64
         || pattern.shareId?.length <= 24,
     
-    "goo": pattern => pattern.id.length == 17,
+    "maps": pattern => pattern.id.length == 17
 }

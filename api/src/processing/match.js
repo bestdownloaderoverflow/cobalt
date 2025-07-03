@@ -270,7 +270,7 @@ export default async function({ host, patternMatch, params, authType }) {
                 });
                 break;
             
-            case "goo":
+            case "maps":
                 r = await maps({
                     ...patternMatch
                 });
