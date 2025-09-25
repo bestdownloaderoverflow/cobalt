@@ -46,14 +46,14 @@ const clientsWithNoCipher = ['IOS', 'ANDROID', 'YTSTUDIO_ANDROID', 'YTMUSIC_ANDR
 
 const videoQualities = [144, 240, 360, 480, 720, 1080, 1440, 2160, 4320];
 
-const cloneInnertube = async (customFetch, useSession) => {
+const cloneInnertube = async (customFetch, useSession, clientHasCipher) => {
     const shouldRefreshPlayer = lastRefreshedAt + PLAYER_REFRESH_PERIOD < new Date();
 
     const rawCookie = getCookie('youtube');
     const cookie = rawCookie?.toString();
 
     const sessionTokens = getYouTubeSession();
-    const retrieve_player = Boolean(sessionTokens || cookie);
+    const retrieve_player = Boolean(sessionTokens || cookie || clientHasCipher);
 
     if (useSession && env.ytSessionServer && !sessionTokens?.potoken) {
         throw "no_session_tokens";
@@ -66,6 +66,7 @@ const cloneInnertube = async (customFetch, useSession) => {
             cookie,
             po_token: useSession ? sessionTokens?.potoken : undefined,
             visitor_data: useSession ? sessionTokens?.visitor_data : undefined,
+            player_id: '0004de42' // TODO: this should probably not be hardcoded
         });
         lastRefreshedAt = +new Date();
     }
@@ -210,7 +211,8 @@ export default async function (o) {
                 ...init,
                 dispatcher: o.dispatcher
             }),
-            useSession
+            useSession,
+            !clientsWithNoCipher.includes(innertubeClient),
         );
     } catch (e) {
         if (e === "no_session_tokens") {
