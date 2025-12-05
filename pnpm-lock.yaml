@@ -37,6 +37,9 @@ importers:
       ffmpeg-static:
         specifier: ^5.1.0
         version: 5.2.0
+      googlevideo:
+        specifier: ^4.0.4
+        version: 4.0.4
       hls-parser:
         specifier: ^0.10.7
         version: 0.10.9
@@ -1332,6 +1335,9 @@ packages:
   globals@14.0.0:
     resolution: {integrity: sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ==}
     engines: {node: '>=18'}
+
+  googlevideo@4.0.4:
+    resolution: {integrity: sha512-S/rfuoPBI+qXCEUPJeVhXsHoISMgVhOz8hHSpGWa0OztfHhh+g9EKaEcqAb/+ttO7meoNQNqIy9dfIpz7HPc4g==}
 
   gopd@1.0.1:
     resolution: {integrity: sha512-d65bNlIadxvpb/A2abVdlqKqV563juRnZ1Wtk6s1sIR8uNsXR70xqIzVqxVf1eTqDunwT2MkczEeaezCKTZhwA==}
@@ -3289,6 +3295,10 @@ snapshots:
       path-scurry: 2.0.0
 
   globals@14.0.0: {}
+
+  googlevideo@4.0.4:
+    dependencies:
+      '@bufbuild/protobuf': 2.2.5
 
   gopd@1.0.1:
     dependencies:

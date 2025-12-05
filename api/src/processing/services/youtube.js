@@ -7,6 +7,7 @@ import { env } from "../../config.js";
 import { getCookie } from "../cookie/manager.js";
 import { createStream } from "../../stream/manage.js";
 import { getYouTubeSession } from "../helpers/youtube-session.js";
+import { getBasicInfo } from "../helpers/youtube-onesie.js";
 
 const PLAYER_REFRESH_PERIOD = 1000 * 60 * 15; // ms
 
@@ -306,7 +307,7 @@ export default async function (o) {
 
     let info;
     try {
-        info = await yt.getBasicInfo(o.id, { client: innertubeClient });
+        info = await getBasicInfo(yt, o.id, innertubeClient);
     } catch (e) {
         if (e?.info) {
             let errorInfo;
