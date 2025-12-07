@@ -651,7 +651,7 @@ export default async function (o) {
         }
     }
 
-    if (video && audio) {
+    if (video?.url && audio?.url) {
         let resolution;
 
         if (useHLS) {
