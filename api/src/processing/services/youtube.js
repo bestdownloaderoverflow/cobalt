@@ -327,10 +327,15 @@ export default async function (o) {
             parse: true,
             playbackContext: {
                 contentPlaybackContext: {
-                    encryptedHostFlags
+                    encryptedHostFlags,
+                    vis: 0,
+                    splay: false,
+                    lactMilliseconds: '-1',
+                    signatureTimestamp: yt.session.player?.signature_timestamp,
                 }
             }
-        })
+        });
+
         // info = await yt.getBasicInfo(o.id, { client: innertubeClient });
     } catch (e) {
         if (e?.info) {
