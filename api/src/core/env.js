@@ -12,7 +12,7 @@ const forceLocalProcessingOptions = ["never", "session", "always"];
 const youtubeHlsOptions = ["never", "key", "always"];
 
 const httpProxyVariables = ["NO_PROXY", "HTTP_PROXY", "HTTPS_PROXY"].flatMap(
-    k => [ k, k.toLowerCase() ]
+    k => [k, k.toLowerCase()]
 );
 
 const changeCallbacks = {};
@@ -21,7 +21,7 @@ const onEnvChanged = (changes) => {
     for (const key of changes) {
         if (changeCallbacks[key]) {
             changeCallbacks[key].map(fn => {
-                try { fn() } catch {}
+                try { fn() } catch { }
             });
         }
     }
@@ -61,6 +61,7 @@ export const loadEnvs = (env = process.env) => {
     }
 
     return {
+        workerID: env.WORKER_ID || '',
         apiURL: env.API_URL || '',
         apiPort: env.API_PORT || 9000,
         tunnelPort: env.API_PORT || 9000,
@@ -108,9 +109,9 @@ export const loadEnvs = (env = process.env) => {
         jwtLifetime: env.JWT_EXPIRY || 120,
 
         sessionEnabled: env.TURNSTILE_SITEKEY
-                            && env.TURNSTILE_SECRET
-                            && env.JWT_SECRET
-                            && !env.MEOWING_SESSION_REQUIRED_FOR,
+            && env.TURNSTILE_SECRET
+            && env.JWT_SECRET
+            && !env.MEOWING_SESSION_REQUIRED_FOR,
 
         sessionRequiredCIDRs: env.MEOWING_SESSION_REQUIRED_FOR?.split(",")
             .map(cidr => ipaddr.parseCIDR(cidr)),
@@ -205,7 +206,7 @@ const reloadEnvs = async (contents) => {
             continue;
         }
 
-        let [ key, value ] = line.split(/=(.+)?/);
+        let [key, value] = line.split(/=(.+)?/);
         if (key) {
             if (value.match(/^['"]/) && value.match(/['"]$/)) {
                 value = JSON.parse(value);
@@ -230,31 +231,31 @@ const reloadEnvs = async (contents) => {
 
 const wrapReload = (contents) => {
     reloadEnvs(contents)
-    .then(changes => {
-        if (changes.length === 0) {
-            return;
-        }
-
-        onEnvChanged(changes);
-
-        console.log(`${Green('[✓]')} envs reloaded successfully!`);
-        for (const key of changes) {
-            const value = currentEnv[key];
-            const isSecret = key.toLowerCase().includes('apikey')
-                          || key.toLowerCase().includes('secret')
-                          || key === 'httpProxyValues';
-
-            if (!value) {
-                console.log(`    removed: ${key}`);
-            } else {
-                console.log(`    changed: ${key} -> ${isSecret ? '***' : value}`);
+        .then(changes => {
+            if (changes.length === 0) {
+                return;
             }
-        }
-    })
-    .catch((e) => {
-        console.error(`${Yellow('[!]')} Failed reloading environment variables at ${new Date().toISOString()}.`);
-        console.error('Error:', e);
-    });
+
+            onEnvChanged(changes);
+
+            console.log(`${Green('[✓]')} envs reloaded successfully!`);
+            for (const key of changes) {
+                const value = currentEnv[key];
+                const isSecret = key.toLowerCase().includes('apikey')
+                    || key.toLowerCase().includes('secret')
+                    || key === 'httpProxyValues';
+
+                if (!value) {
+                    console.log(`    removed: ${key}`);
+                } else {
+                    console.log(`    changed: ${key} -> ${isSecret ? '***' : value}`);
+                }
+            }
+        })
+        .catch((e) => {
+            console.error(`${Yellow('[!]')} Failed reloading environment variables at ${new Date().toISOString()}.`);
+            console.error('Error:', e);
+        });
 }
 
 let watcher;
@@ -281,7 +282,7 @@ export const setupEnvWatcher = () => {
     if (cluster.isPrimary) {
         const envFile = currentEnv.envFile;
         const isFile = !isURL(envFile)
-                       || new URL(envFile).protocol === 'file:';
+            || new URL(envFile).protocol === 'file:';
 
         if (isFile) {
             setupWatcherFromFile(envFile);

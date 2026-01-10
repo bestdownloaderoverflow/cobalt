@@ -182,7 +182,7 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
                 return fail(res, "error.api.auth.jwt.invalid");
             }
 
-            const [ type, token, ...rest ] = authorization.split(" ");
+            const [type, token, ...rest] = authorization.split(" ");
             if (!token || type.toLowerCase() !== 'bearer' || rest.length) {
                 return fail(res, "error.api.auth.jwt.invalid");
             }
@@ -300,7 +300,7 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
         const iv = String(req.query.iv);
 
         const checkQueries = id && exp && sig && sec && iv;
-        const checkBaseLength = id.length === 21 && exp.length === 13;
+        const checkBaseLength = (id.length === 21 || id.length === 24) && exp.length === 13;
         const checkSafeLength = sig.length === 43 && sec.length === 43 && iv.length === 22;
 
         if (!checkQueries || !checkBaseLength || !checkSafeLength) {

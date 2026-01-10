@@ -13,14 +13,14 @@ import { hashHmac } from "../security/secrets.js";
 import { zip } from "../misc/utils.js";
 
 // optional dependency
-const freebind = (env.freebindCIDR || env.sourceIps) && await import('freebind').catch(() => {});
+const freebind = (env.freebindCIDR || env.sourceIps) && await import('freebind').catch(() => { });
 
 const streamCache = new Store('streams');
 
 const internalStreamCache = new Map();
 
 export function createStream(obj) {
-    const streamID = nanoid(),
+    const streamID = (env.workerID ? `${env.workerID}-` : '') + nanoid(),
         iv = randomBytes(16).toString('base64url'),
         secret = randomBytes(32).toString('base64url'),
         exp = new Date().getTime() + env.streamLifespan * 1000,
@@ -208,12 +208,12 @@ export function destroyInternalStream(url) {
     }
 }
 
-const transplantInternalTunnels = function(tunnelUrls, transplantUrls) {
+const transplantInternalTunnels = function (tunnelUrls, transplantUrls) {
     if (tunnelUrls.length !== transplantUrls.length) {
         return;
     }
 
-    for (const [ tun, url ] of zip(tunnelUrls, transplantUrls)) {
+    for (const [tun, url] of zip(tunnelUrls, transplantUrls)) {
         const id = getInternalTunnelId(tun);
         const itunnel = getInternalTunnel(id);
 
@@ -256,7 +256,7 @@ const transplantTunnel = async function (dispatcher) {
 
         transplantInternalTunnels(tunnels, response.urls);
     }
-    catch {}
+    catch { }
     finally {
         finished();
         delete this.pendingTransplant;
