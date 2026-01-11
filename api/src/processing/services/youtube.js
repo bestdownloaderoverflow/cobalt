@@ -9,8 +9,10 @@ import { createStream } from "../../stream/manage.js";
 import { getYouTubeSession } from "../helpers/youtube-session.js";
 
 const PLAYER_REFRESH_PERIOD = 1000 * 60 * 15; // ms
+const MINTER_REFRESH_PERIOD = 1000 * 60 * 60 * 6;
 
 let innertube, lastRefreshedAt;
+let poMinter, poMinterLastRefresh = 0;
 
 const codecList = {
     h264: {
@@ -70,9 +72,48 @@ const youtubeEval = async (data, env) => {
     return vm.runInNewContext(code);
 }
 
+
 let encryptedHostFlags = "";
+const fetchEncryptedHostFlags = async (fetch) => {
+    const embedResp = await fetch("https://youtube.com/embed/QfKmnuHMpYo", {
+        headers: {
+            "Referer": "https://www.google.com"
+        }
+    })
+    .then(r => r.text());
+    
+    const hostFlagsMatch = /encryptedHostFlags":"(.+?)"/.exec(embedResp);
+    if (hostFlagsMatch?.length > 1) {
+        encryptedHostFlags = hostFlagsMatch[1];
+    } else {
+        console.error(new Date(), "Could not fetch encryptedHostFlags, no match!");
+    }
+}
+
+/**
+ * @type {typeof import("../helpers/youtube-po.js")}
+ */
+let poModule;
+
 const cloneInnertube = async (customFetch, useSession) => {
     Platform.shim.eval = youtubeEval;
+
+    if (env.ytGeneratePoTokens) {
+        if (!poModule) {
+            // Importing this helper also needs BGUtils and JSDOM,
+            // I'm importing them dynamically here so a) startup
+            // doesn't get delayed and b) so I can mark these
+            // dependencies as optional
+            poModule = await import("../helpers/youtube-po.js");
+        }
+
+        if (!poMinter || +new Date() > poMinterLastRefresh + MINTER_REFRESH_PERIOD) {
+            poMinter?.then(minter => minter.remove()).catch(() => {});
+            poMinter = poModule.getMinter({ fetch: customFetch });
+            poMinterLastRefresh = +new Date();
+        }
+    }
+
     const shouldRefreshPlayer = globalThis.FORCE_RESET_INNERTUBE_PLAYER || lastRefreshedAt + PLAYER_REFRESH_PERIOD < new Date();
 
     const rawCookie = getCookie('youtube');
@@ -97,20 +138,18 @@ const cloneInnertube = async (customFetch, useSession) => {
             enable_session_cache: false,
             player_id: env.ytPlayerId,
         });
-        lastRefreshedAt = +new Date();
 
-        const embedResp = await customFetch("https://youtube.com/embed/QfKmnuHMpYo", {
-            headers: {
-                "Referer": "https://www.google.com"
-            }
-        })
-            .then(r => r.text());
+        if (env.ytGeneratePoTokens) {
+            const { minter } = await poMinter;
+            innertube.session.po_token = await minter.mintAsWebsafeString(innertube.session.context.client.visitorData);
+        }
+
+        lastRefreshedAt = +new Date();
         
-        const hostFlagsMatch = /encryptedHostFlags":"(.+?)"/.exec(embedResp);
-        if (hostFlagsMatch?.length > 1) {
-            encryptedHostFlags = hostFlagsMatch[1];
-        } else {
-            console.error(new Date(), "Could not fetch encryptedHostFlags, no match!");
+        if (!useSession && env.customInnertubeClient === "WEB_EMBEDDED") {
+            // WEB_EMBEDDED sometimes needs a property named `encryptedHostFlags`, which you
+            // can seemingly only get by extracting it out of a player response
+            await fetchEncryptedHostFlags(customFetch);
         }
     }
 
@@ -124,7 +163,7 @@ const cloneInnertube = async (customFetch, useSession) => {
         cookie,
         customFetch ?? innertube.session.http.fetch,
         innertube.session.cache,
-        sessionTokens?.potoken
+        innertube.session.po_token ?? sessionTokens?.potoken
     );
 
     const yt = new Innertube(session);
@@ -321,22 +360,31 @@ export default async function (o) {
 
     let info;
     try {
-        info = await yt.actions.execute("/player", {
+        const args = {
             videoId: o.id,
             client: innertubeClient,
             parse: true,
             playbackContext: {
                 contentPlaybackContext: {
-                    encryptedHostFlags,
                     vis: 0,
                     splay: false,
                     lactMilliseconds: '-1',
                     signatureTimestamp: yt.session.player?.signature_timestamp,
                 }
             }
-        });
+        };
 
-        // info = await yt.getBasicInfo(o.id, { client: innertubeClient });
+        if (innertubeClient === "WEB_EMBEDDED" && encryptedHostFlags) {
+            args.playbackContext.contentPlaybackContext.encryptedHostFlags = encryptedHostFlags;
+        }
+
+        if (yt.session.po_token) {
+            args.serviceIntegrityDimensions = {
+                poToken: yt.session.po_token
+            };
+        }
+
+        info = await yt.actions.execute("/player", args);
     } catch (e) {
         if (e?.info) {
             let errorInfo;
@@ -351,19 +399,6 @@ export default async function (o) {
         }
 
         if (e?.message === "This video is unavailable") {
-            // there's this weird error 18 that persisted
-            // across an innertube session for me
-            // resetting the session seems to fix it
-            // temporarily?
-
-            // Error code: 152 - 18
-            // Error code: 18
-            if (e?.info?.error_screen?.subreason?.toString()?.endsWith(" 18")) {
-                lastRefreshedAt = +new Date(0);
-                console.log(e.info.error_screen.subreason);
-                return { error: "content.video.unavailable", retry: true };
-            }
-
             return { error: "content.video.unavailable" };
         }
 
@@ -378,7 +413,6 @@ export default async function (o) {
     switch (playability.status) {
         case "LOGIN_REQUIRED":
             if (playability.reason.endsWith("bot")) {
-                // Instantly refresh
                 lastRefreshedAt = +new Date(0);
                 return { error: "youtube.login", retry: true }
             }

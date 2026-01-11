@@ -43,7 +43,9 @@
         "zod": "^3.23.8"
     },
     "optionalDependencies": {
+        "bgutils-js": "^3.2.0",
         "freebind": "^0.2.2",
+        "jsdom": "^27.3.0",
         "rate-limit-redis": "^4.2.0",
         "redis": "^4.7.0"
     }
