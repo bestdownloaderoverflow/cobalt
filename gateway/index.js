@@ -159,6 +159,7 @@ async function handleGenerate(req, res, bodyBuffer) {
 // Handler: GET /tunnel (Download)
 async function handleTunnel(req, res, url) {
     const idParam = url.searchParams.get('id');
+    const serviceParam = url.searchParams.get('service');
 
     if (!idParam) {
         res.writeHead(400);
@@ -198,15 +199,20 @@ async function handleTunnel(req, res, url) {
                     (estimatedLength > 0 && (realLength === 0 || realLength === -1)) ||
                     ((estimatedLength <= 0 || estimatedLength === -1) && (realLength === 0 || realLength === null || realLength === -1))
                 ) {
-                    console.warn(`[${worker.id}] Silent Failure Detected (Invalid response length). Estimated=${estimatedLength}, Real=${realLength}. Triggering heal.`);
-                    restartVPN(worker);
+                    // Exclude specific services from this check (e.g. TikTok)
+                    if (serviceParam === 'tiktok') {
+                        console.log(`[${worker.id}] Silent Failure Detected but ignored for ${serviceParam}.`);
+                    } else {
+                        console.warn(`[${worker.id}] Silent Failure Detected (Invalid response length). Estimated=${estimatedLength}, Real=${realLength}. Triggering heal.`);
+                        restartVPN(worker);
 
-                    res.writeHead(502, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({
-                        error: "Stream Blocked",
-                        detail: "Origin worker returned invalid content length. Worker is restarting."
-                    }));
-                    return;
+                        res.writeHead(502, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({
+                            error: "Stream Blocked",
+                            detail: "Origin worker returned invalid content length. Worker is restarting."
+                        }));
+                        return;
+                    }
                 }
             }
 

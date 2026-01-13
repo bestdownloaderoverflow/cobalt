@@ -71,6 +71,10 @@ export function createStream(obj) {
     for (const [key, value] of Object.entries(params)) {
         streamLink.searchParams.append(key, value);
     }
+    // Pass service info to gateway for specific handling (e.g. TikTok silent failure exclusion)
+    if (obj.service) {
+        streamLink.searchParams.append('service', obj.service);
+    }
 
     return streamLink.toString();
 }
