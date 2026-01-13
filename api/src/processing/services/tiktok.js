@@ -8,7 +8,7 @@ import { convertLanguageCode } from "../../misc/language-codes.js";
 
 const shortDomain = "https://vt.tiktok.com/";
 
-export default async function(obj) {
+export default async function (obj) {
     const cookie = new Cookie({});
     let postId = obj.postId;
 
@@ -18,7 +18,7 @@ export default async function(obj) {
             headers: {
                 "user-agent": cobaltUserAgent,
             }
-        }).then(r => r.text()).catch(() => {});
+        }).then(r => r.text()).catch(() => { });
 
         if (!html) return { error: "fetch.fail" };
 
@@ -56,7 +56,7 @@ export default async function(obj) {
 
         // status_deleted or etc
         if (videoDetail.statusMsg) {
-            return { error: "content.post.unavailable"};
+            return { error: "content.post.unavailable" };
         }
 
         detail = videoDetail?.itemInfo?.itemStruct;
@@ -118,7 +118,8 @@ export default async function(obj) {
             subtitles,
             fileMetadata,
             filename: videoFilename,
-            headers: { cookie }
+            headers: { cookie },
+            fullMetadata: detail
         }
     }
 
@@ -128,7 +129,8 @@ export default async function(obj) {
             audioFilename: audioFilename,
             isAudioOnly: true,
             bestAudio,
-            headers: { cookie }
+            headers: { cookie },
+            fullMetadata: detail
         }
     }
 
@@ -155,7 +157,8 @@ export default async function(obj) {
             audioFilename: audioFilename,
             isAudioOnly: true,
             bestAudio,
-            headers: { cookie }
+            headers: { cookie },
+            fullMetadata: detail
         }
     }
 
@@ -165,7 +168,8 @@ export default async function(obj) {
             audioFilename: audioFilename,
             isAudioOnly: true,
             bestAudio,
-            headers: { cookie }
+            headers: { cookie },
+            fullMetadata: detail
         }
     }
 

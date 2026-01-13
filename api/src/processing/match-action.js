@@ -8,7 +8,7 @@ import { convertLanguageCode } from "../misc/language-codes.js";
 
 const extraProcessingTypes = new Set(["merge", "remux", "mute", "audio", "gif"]);
 
-export default function({
+export default function ({
     r,
     host,
     audioFormat,
@@ -30,7 +30,7 @@ export default function({
             headers: r.headers,
             service: host,
             filename: r.filenameAttributes ?
-                    createFilename(r.filenameAttributes, filenameStyle, isAudioOnly, isAudioMuted) : r.filename,
+                createFilename(r.filenameAttributes, filenameStyle, isAudioOnly, isAudioMuted) : r.filename,
             fileMetadata: !disableMetadata ? r.fileMetadata : false,
             requestIP,
             proxyToUse,
@@ -38,6 +38,7 @@ export default function({
             subtitles: r.subtitles,
             cover: !disableMetadata ? r.cover : false,
             cropCover: !disableMetadata ? r.cropCover : false,
+            fullMetadata: r.fullMetadata,
         },
         params = {};
 
@@ -55,10 +56,10 @@ export default function({
     }
 
     if (action === "muteVideo" && isAudioMuted && !r.filenameAttributes) {
-        const [ name, ext ] = splitFilenameExtension(r.filename);
+        const [name, ext] = splitFilenameExtension(r.filename);
         defaultParams.filename = `${name}_mute.${ext}`;
     } else if (action === "gif") {
-        const [ name ] = splitFilenameExtension(r.filename);
+        const [name] = splitFilenameExtension(r.filename);
         defaultParams.filename = `${name}.gif`;
     }
 

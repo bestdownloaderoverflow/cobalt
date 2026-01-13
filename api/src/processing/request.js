@@ -46,7 +46,8 @@ export function createResponse(responseType, responseData) {
             case "tunnel":
                 response = {
                     url: createStream(responseData),
-                    filename: responseData?.filename
+                    filename: responseData?.filename,
+                    fullMetadata: responseData?.fullMetadata
                 }
                 break;
 
@@ -61,6 +62,7 @@ export function createResponse(responseType, responseData) {
                         filename: responseData?.filename,
                         metadata: responseData?.fileMetadata || undefined,
                         subtitles: !!responseData?.subtitles || undefined,
+                        fullMetadata: responseData?.fullMetadata,
                     },
 
                     audio: {
@@ -92,7 +94,8 @@ export function createResponse(responseType, responseData) {
                 response = {
                     picker: responseData?.picker,
                     audio: responseData?.url,
-                    audioFilename: responseData?.filename
+                    audioFilename: responseData?.filename,
+                    fullMetadata: responseData?.fullMetadata
                 }
                 break;
 
@@ -134,7 +137,7 @@ export function getIP(req, prefix = 56) {
     }
 
     const v6Bytes = ip.toByteArray();
-          v6Bytes.fill(0, prefix / 8);
+    v6Bytes.fill(0, prefix / 8);
 
     return ipaddr.fromByteArray(v6Bytes).toString();
 }
