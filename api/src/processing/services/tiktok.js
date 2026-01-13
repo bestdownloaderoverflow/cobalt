@@ -119,7 +119,7 @@ export default async function (obj) {
             fileMetadata,
             filename: videoFilename,
             headers: { cookie },
-            fullMetadata: detail
+            fullMetadata: obj.fullMetadata ? detail : undefined
         }
     }
 
@@ -130,7 +130,7 @@ export default async function (obj) {
             isAudioOnly: true,
             bestAudio,
             headers: { cookie },
-            fullMetadata: detail
+            fullMetadata: obj.fullMetadata ? detail : undefined
         }
     }
 
@@ -158,7 +158,7 @@ export default async function (obj) {
             isAudioOnly: true,
             bestAudio,
             headers: { cookie },
-            fullMetadata: detail
+            fullMetadata: obj.fullMetadata ? detail : undefined
         }
     }
 
@@ -169,7 +169,7 @@ export default async function (obj) {
             isAudioOnly: true,
             bestAudio,
             headers: { cookie },
-            fullMetadata: detail
+            fullMetadata: obj.fullMetadata ? detail : undefined
         }
     }
 

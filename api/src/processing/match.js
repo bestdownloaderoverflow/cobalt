@@ -173,6 +173,7 @@ export default async function match({ host, patternMatch, params, authType, retr
                     h265: params.allowH265,
                     alwaysProxy: params.alwaysProxy,
                     subtitleLang,
+                    fullMetadata: params.fullMetadata,
                 });
                 break;
 
@@ -318,7 +319,7 @@ export default async function match({ host, patternMatch, params, authType, retr
                     return await match({ host, patternMatch, params, authType, retryCount });
             }
             let context;
-            switch(r.error) {
+            switch (r.error) {
                 case "content.too_long":
                     context = {
                         limit: parseFloat((env.durationLimit / 60).toFixed(2)),

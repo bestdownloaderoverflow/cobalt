@@ -3,8 +3,8 @@ import { normalizeURL } from "./url.js";
 
 export const apiSchema = z.object({
     url: z.string()
-          .min(1)
-          .transform(url => normalizeURL(url)),
+        .min(1)
+        .transform(url => normalizeURL(url)),
 
     audioBitrate: z.enum(
         ["320", "256", "128", "96", "64", "8"]
@@ -39,26 +39,27 @@ export const apiSchema = z.object({
     ).default("disabled"),
 
     youtubeDubLang: z.string()
-                     .min(2)
-                     .max(8)
-                     .regex(/^[0-9a-zA-Z\-]+$/)
-                     .optional(),
+        .min(2)
+        .max(8)
+        .regex(/^[0-9a-zA-Z\-]+$/)
+        .optional(),
 
     subtitleLang: z.string()
-                     .min(2)
-                     .max(8)
-                     .regex(/^[0-9a-zA-Z\-]+$/)
-                     .optional(),
+        .min(2)
+        .max(8)
+        .regex(/^[0-9a-zA-Z\-]+$/)
+        .optional(),
 
     disableMetadata: z.boolean().default(false),
 
     allowH265: z.boolean().default(false),
     convertGif: z.boolean().default(true),
     tiktokFullAudio: z.boolean().default(false),
+    fullMetadata: z.boolean().default(false),
 
     alwaysProxy: z.boolean().default(false),
 
     youtubeHLS: z.boolean().default(false),
     youtubeBetterAudio: z.boolean().default(false),
 })
-.strict();
+    .strict();
