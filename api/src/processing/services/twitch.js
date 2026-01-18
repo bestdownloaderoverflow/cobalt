@@ -48,12 +48,13 @@ export default async function (obj) {
             {
                 "operationName": "VideoAccessToken_Clip",
                 "variables": {
-                    "slug": obj.clipId
+                    "platform": "web",
+                    "slug": obj.clipId,
                 },
                 "extensions": {
                     "persistedQuery": {
                         "version": 1,
-                        "sha256Hash": "36b89d2507fce29e5ca551df756d27c1cfe079e2609642b4390aa4c35796eb11"
+                        "sha256Hash": "993d9a5131f15a37bd16f32342c44ed1e0b1a9b968c6afdb662d2cddd595f6c5"
                     }
                 }
             }

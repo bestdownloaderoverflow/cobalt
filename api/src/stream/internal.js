@@ -111,6 +111,7 @@ async function handleGenericStream(streamInfo, res) {
         const fileResponse = await request(streamInfo.url, {
             headers: {
                 ...Object.fromEntries(streamInfo.headers),
+                ...getHeaders(streamInfo.service),
                 host: undefined
             },
             dispatcher: streamInfo.dispatcher,
@@ -134,6 +135,7 @@ async function handleGenericStream(streamInfo, res) {
         }
 
         if (isHls) {
+            res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
             await handleHlsPlaylist(streamInfo, fileResponse, res);
         } else {
             pipe(fileResponse.body, res, cleanup);

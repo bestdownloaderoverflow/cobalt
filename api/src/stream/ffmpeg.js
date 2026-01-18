@@ -48,10 +48,11 @@ const killProcess = (p) => {
 }
 
 const getCommand = (args) => {
+    const ffmpegPath = env.useSystemFFmpeg ? "ffmpeg" : ffmpeg;
     if (typeof env.processingPriority === 'number' && !isNaN(env.processingPriority)) {
-        return ['nice', ['-n', env.processingPriority.toString(), ffmpeg, ...args]]
+        return ['nice', ['-n', env.processingPriority.toString(), ffmpegPath, ...args]]
     }
-    return [ffmpeg, args]
+    return [ffmpegPath, args]
 }
 
 const render = async (res, streamInfo, ffargs, estimateMultiplier) => {
@@ -75,6 +76,10 @@ const render = async (res, streamInfo, ffargs, estimateMultiplier) => {
                 'inherit', 'inherit', 'inherit',
                 'pipe'
             ],
+            env: {
+                "http_proxy": "",
+                "https_proxy": "",
+            }
         });
 
         const [,,, muxOutput] = process.stdio;
@@ -99,7 +104,11 @@ const render = async (res, streamInfo, ffargs, estimateMultiplier) => {
 const remux = async (streamInfo, res) => {
     const format = streamInfo.filename.split('.').pop();
     const urls = Array.isArray(streamInfo.urls) ? streamInfo.urls : [streamInfo.urls];
-    const args = urls.flatMap(url => ['-i', url]);
+    let args = urls.flatMap(url => ['-i', url]);
+
+    if (env.useSystemFFmpeg && streamInfo.isHLS) {
+        args = urls.flatMap(url => ['-extension_picky', '0', '-i', url]);
+    }
 
     // if the stream type is merge, we expect two URLs
     if (streamInfo.type === 'merge' && urls.length !== 2) {
@@ -122,7 +131,7 @@ const remux = async (streamInfo, res) => {
     } else {
         args.push(
             '-map', '0:v:0',
-            '-map', '0:a:0'
+            '-map', '0:a:0?'
         );
     }
 

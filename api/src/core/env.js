@@ -125,6 +125,8 @@ export const loadEnvs = (env = process.env) => {
         allServices,
         enabledServices,
 
+        useSystemFFmpeg: env.USE_SYSTEM_FFMPEG === "1",
+
         customInnertubeClient: env.CUSTOM_INNERTUBE_CLIENT,
         ytSessionServer: env.YOUTUBE_SESSION_SERVER,
         ytSessionReloadInterval: 300,

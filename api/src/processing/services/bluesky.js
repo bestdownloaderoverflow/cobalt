@@ -2,6 +2,28 @@ import HLS from "hls-parser";
 import { cobaltUserAgent } from "../../config.js";
 import { createStream } from "../../stream/manage.js";
 
+const extractVideoNonHLS = async ({ did, cid, filename, dispatcher }) => {
+    const didDoc = await fetch(`https://plc.directory/${did}`, { dispatcher })
+        .then(r => r.json())
+        .catch(() => {});
+    
+    if (!didDoc) return { error: "fetch.fail" };
+
+    const pds = didDoc.service.find(service => service.type === "AtprotoPersonalDataServer")
+        ?.serviceEndpoint;
+    
+    if (!pds) return { error: "fetch.fail" };
+
+    const blobUrl = new URL("/xrpc/com.atproto.sync.getBlob", pds);
+    blobUrl.searchParams.append("did", did);
+    blobUrl.searchParams.append("cid", cid);
+
+    return {
+        urls: blobUrl.toString(),
+        filename: `${filename}.mp4`,
+    }
+}
+
 const extractVideo = async ({ media, filename, dispatcher }) => {
     let urlMasterHLS = media?.playlist;
 
@@ -120,12 +142,19 @@ export default async function ({ user, post, alwaysProxy, dispatcher }) {
     const embedType = getPost?.thread?.post?.embed?.$type;
     const filename = `bluesky_${user}_${post}`;
 
+    const did = getPost?.thread?.post?.author?.did;
+
     switch (embedType) {
         case "app.bsky.embed.video#view":
-            return extractVideo({
-                media: getPost.thread?.post?.embed,
+            // return extractVideo({
+            //     media: getPost.thread?.post?.embed,
+            //     filename,
+            // });
+            return extractVideoNonHLS({
+                did,
+                cid: getPost?.thread?.post?.embed?.cid,
                 filename,
-            });
+            })
 
         case "app.bsky.embed.images#view":
             return extractImages({
@@ -147,9 +176,15 @@ export default async function ({ user, post, alwaysProxy, dispatcher }) {
                     filename,
                 });
             }
-            return extractVideo({
-                media: getPost.thread?.post?.embed?.media,
+            // return extractVideo({
+            //     media: getPost.thread?.post?.embed?.media,
+            //     filename,
+            // });
+            return extractVideoNonHLS({
+                did,
+                cid: getPost?.thread?.post?.embed?.media?.cid,
                 filename,
+                dispatcher,
             });
     }
 
