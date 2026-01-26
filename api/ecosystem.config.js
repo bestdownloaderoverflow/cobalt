@@ -1,10 +1,11 @@
 module.exports = {
   apps: [{
     name: "cobalt-api",
-    script: "./src/cobalt.js",
+    script: "pnpm",
+    args: "start",
     env: {
       API_PORT: 3241,
-      // Tambahkan variabel lain jika perlu
+      API_URL: "https://tiktok-c.snaptik.fit",
     }
   }]
 }
