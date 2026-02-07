@@ -1,0 +1,231 @@
+services:
+  # --- Pair 1 ---
+  gluetun-1:
+    image: qmcgaw/gluetun:v3.41
+    container_name: gluetun-1
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "8001:8000" 
+    environment:
+      - VPN_SERVICE_PROVIDER=mullvad
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=IK3CfRM8Z3GTTsF+z1k72nBsjxYtGuYPwSIEQOQM9GU=
+      - WIREGUARD_ADDRESSES=10.68.164.165/32
+      - SERVER_COUNTRIES=USA
+      - DNS_ADDRESS=10.64.0.1
+      - HTTP_CONTROL_SERVER_ADDRESS=:8000
+      - HTTP_CONTROL_SERVER_LOG=on
+      - "HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE={\"auth\":\"basic\",\"username\":\"admin\",\"password\":\"secretpassword\"}"
+    volumes:
+      - ./gluetun/data1:/gluetun
+    restart: unless-stopped
+
+  cobalt-api-1:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: cobalt-api-1
+    network_mode: "service:gluetun-1"
+    depends_on:
+      - gluetun-1
+    environment:
+      - WORKER_ID=w1
+      - API_PORT=9000
+      - API_URL=${API_URL:-http://localhost:9111/}
+      - CUSTOM_INNERTUBE_CLIENT=${CUSTOM_INNERTUBE_CLIENT:-WEB_EMBEDDED}
+      - YOUTUBE_SESSION_INNERTUBE_CLIENT=${YOUTUBE_SESSION_INNERTUBE_CLIENT:-WEB_EMBEDDED}
+      - DURATION_LIMIT=5400
+    restart: unless-stopped
+
+  # --- Pair 2 ---
+  gluetun-2:
+    image: qmcgaw/gluetun:v3.41
+    container_name: gluetun-2
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "8002:8000"
+    environment:
+      - VPN_SERVICE_PROVIDER=mullvad
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=IK3CfRM8Z3GTTsF+z1k72nBsjxYtGuYPwSIEQOQM9GU=
+      - WIREGUARD_ADDRESSES=10.68.164.165/32
+      - SERVER_COUNTRIES=USA
+      - DNS_ADDRESS=10.64.0.1
+      - HTTP_CONTROL_SERVER_ADDRESS=:8000
+      - HTTP_CONTROL_SERVER_LOG=on
+      - "HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE={\"auth\":\"basic\",\"username\":\"admin\",\"password\":\"secretpassword\"}"
+    volumes:
+      - ./gluetun/data2:/gluetun
+    restart: unless-stopped
+
+  cobalt-api-2:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: cobalt-api-2
+    network_mode: "service:gluetun-2"
+    depends_on:
+      - gluetun-2
+    environment:
+      - WORKER_ID=w2
+      - API_PORT=9000
+      - API_URL=${API_URL:-http://localhost:9111/}
+      - CUSTOM_INNERTUBE_CLIENT=${CUSTOM_INNERTUBE_CLIENT:-WEB_EMBEDDED}
+      - YOUTUBE_SESSION_INNERTUBE_CLIENT=${YOUTUBE_SESSION_INNERTUBE_CLIENT:-WEB_EMBEDDED}
+      - DURATION_LIMIT=5400
+    restart: unless-stopped
+
+  # --- Pair 3 ---
+  gluetun-3:
+    image: qmcgaw/gluetun:v3.41
+    container_name: gluetun-3
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "8003:8000"
+    environment:
+      - VPN_SERVICE_PROVIDER=mullvad
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=IK3CfRM8Z3GTTsF+z1k72nBsjxYtGuYPwSIEQOQM9GU=
+      - WIREGUARD_ADDRESSES=10.68.164.165/32
+      - SERVER_COUNTRIES=USA
+      - DNS_ADDRESS=10.64.0.1
+      - HTTP_CONTROL_SERVER_ADDRESS=:8000
+      - HTTP_CONTROL_SERVER_LOG=on
+      - "HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE={\"auth\":\"basic\",\"username\":\"admin\",\"password\":\"secretpassword\"}"
+    volumes:
+      - ./gluetun/data3:/gluetun
+    restart: unless-stopped
+
+  cobalt-api-3:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: cobalt-api-3
+    network_mode: "service:gluetun-3"
+    depends_on:
+      - gluetun-3
+    environment:
+      - WORKER_ID=w3
+      - API_PORT=9000
+      - API_URL=${API_URL:-http://localhost:9111/}
+      - CUSTOM_INNERTUBE_CLIENT=${CUSTOM_INNERTUBE_CLIENT:-WEB_EMBEDDED}
+      - YOUTUBE_SESSION_INNERTUBE_CLIENT=${YOUTUBE_SESSION_INNERTUBE_CLIENT:-WEB_EMBEDDED}
+      - DURATION_LIMIT=5400
+    restart: unless-stopped
+
+  # --- Pair 4 ---
+  gluetun-4:
+    image: qmcgaw/gluetun:v3.41
+    container_name: gluetun-4
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "8004:8000"
+    environment:
+      - VPN_SERVICE_PROVIDER=mullvad
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=IK3CfRM8Z3GTTsF+z1k72nBsjxYtGuYPwSIEQOQM9GU=
+      - WIREGUARD_ADDRESSES=10.68.164.165/32
+      - SERVER_COUNTRIES=USA
+      - DNS_ADDRESS=10.64.0.1
+      - HTTP_CONTROL_SERVER_ADDRESS=:8000
+      - HTTP_CONTROL_SERVER_LOG=on
+      - "HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE={\"auth\":\"basic\",\"username\":\"admin\",\"password\":\"secretpassword\"}"
+    volumes:
+      - ./gluetun/data4:/gluetun
+    restart: unless-stopped
+
+  cobalt-api-4:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: cobalt-api-4
+    network_mode: "service:gluetun-4"
+    depends_on:
+      - gluetun-4
+    environment:
+      - WORKER_ID=w4
+      - API_PORT=9000
+      - API_URL=${API_URL:-http://localhost:9111/}
+      - CUSTOM_INNERTUBE_CLIENT=${CUSTOM_INNERTUBE_CLIENT:-WEB_EMBEDDED}
+      - YOUTUBE_SESSION_INNERTUBE_CLIENT=${YOUTUBE_SESSION_INNERTUBE_CLIENT:-WEB_EMBEDDED}
+      - DURATION_LIMIT=5400
+    restart: unless-stopped
+
+  # --- Pair 5 ---
+  gluetun-5:
+    image: qmcgaw/gluetun:v3.41
+    container_name: gluetun-5
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "8005:8000"
+    environment:
+      - VPN_SERVICE_PROVIDER=mullvad
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=IK3CfRM8Z3GTTsF+z1k72nBsjxYtGuYPwSIEQOQM9GU=
+      - WIREGUARD_ADDRESSES=10.68.164.165/32
+      - SERVER_COUNTRIES=USA
+      - DNS_ADDRESS=10.64.0.1
+      - HTTP_CONTROL_SERVER_ADDRESS=:8000
+      - HTTP_CONTROL_SERVER_LOG=on
+      - "HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE={\"auth\":\"basic\",\"username\":\"admin\",\"password\":\"secretpassword\"}"
+    volumes:
+      - ./gluetun/data5:/gluetun
+    restart: unless-stopped
+
+  cobalt-api-5:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: cobalt-api-5
+    network_mode: "service:gluetun-5"
+    depends_on:
+      - gluetun-5
+    environment:
+      - WORKER_ID=w5
+      - API_PORT=9000
+      - API_URL=${API_URL:-http://localhost:9111/}
+      - CUSTOM_INNERTUBE_CLIENT=${CUSTOM_INNERTUBE_CLIENT:-WEB_EMBEDDED}
+      - YOUTUBE_SESSION_INNERTUBE_CLIENT=${YOUTUBE_SESSION_INNERTUBE_CLIENT:-WEB_EMBEDDED}
+      - DURATION_LIMIT=5400
+    restart: unless-stopped
+
+  # --- Smart Gateway (Rust) ---
+  gateway-rust:
+    build:
+      context: ./gateway-rust
+      dockerfile: Dockerfile
+    container_name: cobalt-gateway-rust
+    ports:
+      - "9111:9111"
+    links:
+      - gluetun-1
+      - gluetun-2
+      - gluetun-3
+      - gluetun-4
+      - gluetun-5
+    depends_on:
+      - gluetun-1
+      - gluetun-2
+      - gluetun-3
+      - gluetun-4
+      - gluetun-5
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge
