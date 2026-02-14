@@ -1,7 +1,7 @@
 services:
   # --- Pair 1 ---
   gluetun-1:
-    image: qmcgaw/gluetun:v3.41
+    image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun-1
     cap_add:
       - NET_ADMIN
@@ -42,7 +42,7 @@ services:
 
   # --- Pair 2 ---
   gluetun-2:
-    image: qmcgaw/gluetun:v3.41
+    image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun-2
     cap_add:
       - NET_ADMIN
@@ -83,7 +83,7 @@ services:
 
   # --- Pair 3 ---
   gluetun-3:
-    image: qmcgaw/gluetun:v3.41
+    image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun-3
     cap_add:
       - NET_ADMIN
@@ -124,7 +124,7 @@ services:
 
   # --- Pair 4 ---
   gluetun-4:
-    image: qmcgaw/gluetun:v3.41
+    image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun-4
     cap_add:
       - NET_ADMIN
@@ -165,7 +165,7 @@ services:
 
   # --- Pair 5 ---
   gluetun-5:
-    image: qmcgaw/gluetun:v3.41
+    image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun-5
     cap_add:
       - NET_ADMIN
