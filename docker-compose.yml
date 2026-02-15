@@ -1,7 +1,7 @@
 services:
   # --- Pair 1 ---
   gluetun-1:
-    image: qmcgaw/gluetun:v3.41
+    image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun-1
     cap_add:
       - NET_ADMIN
@@ -12,8 +12,8 @@ services:
     environment:
       - VPN_SERVICE_PROVIDER=mullvad
       - VPN_TYPE=wireguard
-      - WIREGUARD_PRIVATE_KEY=IK3CfRM8Z3GTTsF+z1k72nBsjxYtGuYPwSIEQOQM9GU=
-      - WIREGUARD_ADDRESSES=10.68.164.165/32
+      - WIREGUARD_PRIVATE_KEY=OOfSjJMALjZll7RqZBOtHs/fMHYTon8hi08iM/EhLWQ=
+      - WIREGUARD_ADDRESSES=10.65.22.237/32
       - SERVER_COUNTRIES=USA
       - DNS_ADDRESS=10.64.0.1
       - HTTP_CONTROL_SERVER_ADDRESS=:8000
@@ -42,7 +42,7 @@ services:
 
   # --- Pair 2 ---
   gluetun-2:
-    image: qmcgaw/gluetun:v3.41
+    image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun-2
     cap_add:
       - NET_ADMIN
@@ -53,8 +53,8 @@ services:
     environment:
       - VPN_SERVICE_PROVIDER=mullvad
       - VPN_TYPE=wireguard
-      - WIREGUARD_PRIVATE_KEY=IK3CfRM8Z3GTTsF+z1k72nBsjxYtGuYPwSIEQOQM9GU=
-      - WIREGUARD_ADDRESSES=10.68.164.165/32
+      - WIREGUARD_PRIVATE_KEY=gNgTAKgpCx9FqLrqD5xcq9nx/3eTSi69oldpETPCtkw=
+      - WIREGUARD_ADDRESSES=10.66.56.45/32
       - SERVER_COUNTRIES=USA
       - DNS_ADDRESS=10.64.0.1
       - HTTP_CONTROL_SERVER_ADDRESS=:8000
@@ -83,7 +83,7 @@ services:
 
   # --- Pair 3 ---
   gluetun-3:
-    image: qmcgaw/gluetun:v3.41
+    image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun-3
     cap_add:
       - NET_ADMIN
@@ -94,8 +94,8 @@ services:
     environment:
       - VPN_SERVICE_PROVIDER=mullvad
       - VPN_TYPE=wireguard
-      - WIREGUARD_PRIVATE_KEY=IK3CfRM8Z3GTTsF+z1k72nBsjxYtGuYPwSIEQOQM9GU=
-      - WIREGUARD_ADDRESSES=10.68.164.165/32
+      - WIREGUARD_PRIVATE_KEY=iJ+v9qqH1xXQxvWoImwnFtV15VBhGpyIpN8y19PyRHc=
+      - WIREGUARD_ADDRESSES=10.66.54.27/32
       - SERVER_COUNTRIES=USA
       - DNS_ADDRESS=10.64.0.1
       - HTTP_CONTROL_SERVER_ADDRESS=:8000
@@ -124,7 +124,7 @@ services:
 
   # --- Pair 4 ---
   gluetun-4:
-    image: qmcgaw/gluetun:v3.41
+    image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun-4
     cap_add:
       - NET_ADMIN
@@ -135,8 +135,8 @@ services:
     environment:
       - VPN_SERVICE_PROVIDER=mullvad
       - VPN_TYPE=wireguard
-      - WIREGUARD_PRIVATE_KEY=IK3CfRM8Z3GTTsF+z1k72nBsjxYtGuYPwSIEQOQM9GU=
-      - WIREGUARD_ADDRESSES=10.68.164.165/32
+      - WIREGUARD_PRIVATE_KEY=8MPkPs8k5pFCYWxwh7K8HgQAP40NdqzI8dljx4PL90Q=
+      - WIREGUARD_ADDRESSES=10.73.2.101/32
       - SERVER_COUNTRIES=USA
       - DNS_ADDRESS=10.64.0.1
       - HTTP_CONTROL_SERVER_ADDRESS=:8000
@@ -165,7 +165,7 @@ services:
 
   # --- Pair 5 ---
   gluetun-5:
-    image: qmcgaw/gluetun:v3.41
+    image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun-5
     cap_add:
       - NET_ADMIN
@@ -176,8 +176,8 @@ services:
     environment:
       - VPN_SERVICE_PROVIDER=mullvad
       - VPN_TYPE=wireguard
-      - WIREGUARD_PRIVATE_KEY=IK3CfRM8Z3GTTsF+z1k72nBsjxYtGuYPwSIEQOQM9GU=
-      - WIREGUARD_ADDRESSES=10.68.164.165/32
+      - WIREGUARD_PRIVATE_KEY=OOfSjJMALjZll7RqZBOtHs/fMHYTon8hi08iM/EhLWQ=
+      - WIREGUARD_ADDRESSES=10.65.22.237/32
       - SERVER_COUNTRIES=USA
       - DNS_ADDRESS=10.64.0.1
       - HTTP_CONTROL_SERVER_ADDRESS=:8000
