@@ -84,30 +84,51 @@ async fn restart_vpn(workers: Workers, worker_id: String, client: Client) {
     let control_url = format!("http://{}:{}/v1/vpn/status", host, control_port);
 
     let result: Result<(), String> = async {
-        // Stop VPN
-        client
+        // Stop VPN - with timeout and body drain like Node.js
+        let stop_res = client
             .put(&control_url)
             .header("Authorization", &auth_header)
             .header("Content-Type", "application/json")
             .json(&serde_json::json!({"status": "stopped"}))
+            .timeout(std::time::Duration::from_secs(30))
             .send()
-            .await
-            .map_err(|e| e.to_string())?;
-        println!("[{}] VPN Stopped.", worker_id);
+            .await;
+        
+        match stop_res {
+            Ok(res) => {
+                // Drain response body to release connection (like Node.js body.dump())
+                let _ = res.text().await;
+                println!("[{}] VPN Stopped.", worker_id);
+            }
+            Err(e) => {
+                eprintln!("[{}] Warning: Failed to stop VPN: {}. Continuing anyway...", worker_id, e);
+                // Don't fail here - continue like Node.js
+            }
+        }
 
         // Wait 2 seconds
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-        // Start VPN
-        client
+        // Start VPN - with timeout and body drain like Node.js
+        let start_res = client
             .put(&control_url)
             .header("Authorization", &auth_header)
             .header("Content-Type", "application/json")
             .json(&serde_json::json!({"status": "running"}))
+            .timeout(std::time::Duration::from_secs(30))
             .send()
-            .await
-            .map_err(|e| e.to_string())?;
-        println!("[{}] VPN Started.", worker_id);
+            .await;
+        
+        match start_res {
+            Ok(res) => {
+                // Drain response body to release connection
+                let _ = res.text().await;
+                println!("[{}] VPN Started.", worker_id);
+            }
+            Err(e) => {
+                return Err(format!("Failed to start VPN: {}", e));
+            }
+        }
 
         // Wait for connection to stabilize (10s)
         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
@@ -567,10 +588,11 @@ async fn main() {
 
     let workers: Workers = Arc::new(RwLock::new(worker_list));
 
-    // Shared HTTP client (connection pooling built-in, no global timeout for streaming)
+    // Shared HTTP client with proper timeout settings
     let client = Client::builder()
         .pool_max_idle_per_host(10)
         .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(60))  // Global timeout fallback
         .build()
         .expect("Failed to build HTTP client");
 
