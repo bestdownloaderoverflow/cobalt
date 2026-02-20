@@ -204,11 +204,11 @@ services:
       - DURATION_LIMIT=5400
     restart: unless-stopped
 
-  # --- Smart Gateway ---
+  # --- Smart Gateway (Go) ---
   gateway:
     build:
-      context: ./gateway
-    container_name: cobalt-gateway
+      context: ./gateway-go
+    container_name: cobalt-gateway-go
     ports:
       - "9111:9111"
     links:
