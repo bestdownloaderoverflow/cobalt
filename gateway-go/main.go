@@ -58,11 +58,11 @@ func init() {
 
 func parseLengthHeader(value string) int64 {
 	if value == "" {
-		return -1
+		return -2 // Represent "null" - header not present
 	}
 	parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
 	if err != nil {
-		return -1
+		return -1 // Parse error
 	}
 	return parsed
 }
@@ -278,7 +278,7 @@ func handleTunnel(w http.ResponseWriter, r *http.Request, u *url.URL) {
 		realLength := parseLengthHeader(resp.Header.Get("content-length"))
 
 		silentFailure := (estimatedLength > 0 && (realLength == 0 || realLength == -1)) ||
-			((estimatedLength <= 0 || estimatedLength == -1) && (realLength == 0 || realLength == -1))
+			((estimatedLength <= 0 || estimatedLength == -1) && (realLength == 0 || realLength == -2 || realLength == -1))
 
 		if silentFailure {
 			if serviceParam == "tiktok" {
@@ -286,6 +286,7 @@ func handleTunnel(w http.ResponseWriter, r *http.Request, u *url.URL) {
 			} else {
 				log.Printf("[%s] Silent Failure Detected (Invalid response length). Estimated=%d, Real=%d. Triggering heal.", worker.id, estimatedLength, realLength)
 				go restartVPN(worker)
+				resp.Body.Close() // Close body to prevent connection leak
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadGateway)
 				json.NewEncoder(w).Encode(map[string]string{
