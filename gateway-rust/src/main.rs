@@ -53,9 +53,9 @@ fn parse_length_header(value: Option<&str>) -> Option<i64> {
 
 // Utility: Health check a worker before marking it healthy
 async fn health_check_worker(host: &str, port: u16, client: &Client) -> bool {
-    let url = format!("http://{}:{}/", host, port);
-    // Try multiple times with short delay between attempts
-    for attempt in 1..=5 {
+    let url = format!("http://{}:{}/api/serverInfo", host, port);
+    // Try multiple times with longer delay - cobalt API takes time to start
+    for attempt in 1..=15 {
         match client
             .get(&url)
             .timeout(std::time::Duration::from_secs(5))
@@ -64,13 +64,15 @@ async fn health_check_worker(host: &str, port: u16, client: &Client) -> bool {
         {
             Ok(res) => {
                 if res.status().is_success() || res.status().as_u16() == 404 {
-                    // 404 is ok - means API is up but endpoint not found
+                    // API is up
                     return true;
                 }
             }
-            Err(_) => {}
+            Err(e) => {
+                println!("[{}] Health check attempt {} failed: {}", host, attempt, e);
+            }
         }
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     }
     false
 }
