@@ -51,8 +51,32 @@ fn parse_length_header(value: Option<&str>) -> Option<i64> {
     }
 }
 
+// Utility: Health check a worker before marking it healthy
+async fn health_check_worker(host: &str, port: u16, client: &Client) -> bool {
+    let url = format!("http://{}:{}/", host, port);
+    // Try multiple times with short delay between attempts
+    for attempt in 1..=5 {
+        match client
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await
+        {
+            Ok(res) => {
+                if res.status().is_success() || res.status().as_u16() == 404 {
+                    // 404 is ok - means API is up but endpoint not found
+                    return true;
+                }
+            }
+            Err(_) => {}
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+    false
+}
+
 // Utility: Trigger VPN Restart via Docker (using bollard)
-async fn restart_vpn(workers: Workers, worker_id: String, _client: Client) {
+async fn restart_vpn(workers: Workers, worker_id: String, client: Client) {
     // Check if already restarting
     {
         let mut w = workers.write().await;
@@ -85,11 +109,20 @@ async fn restart_vpn(workers: Workers, worker_id: String, _client: Client) {
 
         println!("[{}] Container '{}' restarted successfully.", worker_id, container_name);
 
-        // Wait for container to be healthy (give it time to reconnect VPN)
+        // Wait for initial container startup
         println!("[{}] Waiting for VPN to stabilize...", worker_id);
-        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
 
-        Ok(())
+        // Health check: verify the worker API is actually reachable
+        let worker_host = format!("gluetun-{}", &worker_id[1..]);
+        println!("[{}] Running health check...", worker_id);
+
+        if health_check_worker(&worker_host, 9000, &client).await {
+            println!("[{}] Health check passed.", worker_id);
+            Ok(())
+        } else {
+            Err("Health check failed after restart".to_string())
+        }
     }
     .await;
 
@@ -104,8 +137,10 @@ async fn restart_vpn(workers: Workers, worker_id: String, _client: Client) {
             }
             Err(err) => {
                 eprintln!("[{}] HEAL FAILED: {}", worker_id, err);
-                worker.healthy = true;
+                // Keep unhealthy if heal failed, don't immediately retry
+                worker.healthy = false;
                 worker.restarting = false;
+                worker.failures += 1;
             }
         }
     }
