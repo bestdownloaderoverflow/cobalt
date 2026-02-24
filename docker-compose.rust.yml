@@ -212,6 +212,8 @@ services:
     container_name: cobalt-gateway-rust
     ports:
       - "9111:9111"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     links:
       - gluetun-1
       - gluetun-2

@@ -1,4 +1,5 @@
 use base64::Engine;
+use bollard::Docker;
 use bytes::Bytes;
 use futures_util::StreamExt;
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full, StreamBody};
@@ -50,8 +51,8 @@ fn parse_length_header(value: Option<&str>) -> Option<i64> {
     }
 }
 
-// Utility: Trigger VPN Restart
-async fn restart_vpn(workers: Workers, worker_id: String, client: Client) {
+// Utility: Trigger VPN Restart via Docker (using bollard)
+async fn restart_vpn(workers: Workers, worker_id: String, _client: Client) {
     // Check if already restarting
     {
         let mut w = workers.write().await;
@@ -66,72 +67,27 @@ async fn restart_vpn(workers: Workers, worker_id: String, client: Client) {
         }
     }
 
-    let (host, control_port) = {
-        let w = workers.read().await;
-        if let Some(worker) = w.iter().find(|w| w.id == worker_id) {
-            (worker.host.clone(), worker.control_port)
-        } else {
-            return;
-        }
-    };
+    // Map worker_id to container name (w1 -> gluetun-1, w2 -> gluetun-2, etc.)
+    let container_name = format!("gluetun-{}", &worker_id[1..]);
 
-    println!("[{}] HEALING: Triggering VPN Restart...", worker_id);
-
-    let auth_header = format!(
-        "Basic {}",
-        base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", AUTH_USER, AUTH_PASS))
-    );
-    let control_url = format!("http://{}:{}/v1/vpn/status", host, control_port);
+    println!("[{}] HEALING: Restarting container '{}'...", worker_id, container_name);
 
     let result: Result<(), String> = async {
-        // Stop VPN - with timeout and body drain like Node.js
-        let stop_res = client
-            .put(&control_url)
-            .header("Authorization", &auth_header)
-            .header("Content-Type", "application/json")
-            .json(&serde_json::json!({"status": "stopped"}))
-            .timeout(std::time::Duration::from_secs(30))
-            .send()
-            .await;
-        
-        match stop_res {
-            Ok(res) => {
-                // Drain response body to release connection (like Node.js body.dump())
-                let _ = res.text().await;
-                println!("[{}] VPN Stopped.", worker_id);
-            }
-            Err(e) => {
-                eprintln!("[{}] Warning: Failed to stop VPN: {}. Continuing anyway...", worker_id, e);
-                // Don't fail here - continue like Node.js
-            }
-        }
+        // Connect to Docker daemon
+        let docker = Docker::connect_with_socket_defaults()
+            .map_err(|e| format!("Failed to connect to Docker: {}", e))?;
 
-        // Wait 2 seconds
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        // Restart container
+        docker
+            .restart_container(&container_name, None)
+            .await
+            .map_err(|e| format!("Failed to restart container: {}", e))?;
 
-        // Start VPN - with timeout and body drain like Node.js
-        let start_res = client
-            .put(&control_url)
-            .header("Authorization", &auth_header)
-            .header("Content-Type", "application/json")
-            .json(&serde_json::json!({"status": "running"}))
-            .timeout(std::time::Duration::from_secs(30))
-            .send()
-            .await;
-        
-        match start_res {
-            Ok(res) => {
-                // Drain response body to release connection
-                let _ = res.text().await;
-                println!("[{}] VPN Started.", worker_id);
-            }
-            Err(e) => {
-                return Err(format!("Failed to start VPN: {}", e));
-            }
-        }
+        println!("[{}] Container '{}' restarted successfully.", worker_id, container_name);
 
-        // Wait for connection to stabilize (10s)
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        // Wait for container to be healthy (give it time to reconnect VPN)
+        println!("[{}] Waiting for VPN to stabilize...", worker_id);
+        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
 
         Ok(())
     }
