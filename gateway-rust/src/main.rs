@@ -35,7 +35,8 @@ struct Worker {
     api_port: u16,
     control_port: u16,
     healthy: bool,
-    restarting: bool,
+    restarting: bool,          // sedang restart sekarang (blokir request masuk)
+    restart_scheduled: bool,   // akan restart setelah request ini selesai
     failures: u32,
 }
 
@@ -77,17 +78,57 @@ async fn health_check_worker(host: &str, port: u16, client: &Client) -> bool {
     false
 }
 
-// Utility: Trigger VPN Restart via Docker (using bollard)
-async fn restart_vpn(workers: Workers, worker_id: String, client: Client) {
+// Utility: Schedule a worker for restart (marks it as scheduled, blocks new requests)
+async fn schedule_restart(workers: Workers, worker_id: String) {
+    let mut w = workers.write().await;
+    if let Some(worker) = w.iter_mut().find(|w| w.id == worker_id) {
+        if !worker.restarting && !worker.restart_scheduled {
+            worker.restart_scheduled = true;
+            println!("[{}] Restart scheduled after successful failover.", worker_id);
+        }
+    }
+}
+
+// Utility: Execute scheduled restarts after a successful request
+async fn execute_scheduled_restarts(workers: Workers, client: Client) {
+    let scheduled_ids: Vec<String> = {
+        let w = workers.read().await;
+        w.iter()
+            .filter(|w| w.restart_scheduled && !w.restarting)
+            .map(|w| w.id.clone())
+            .collect()
+    };
+
+    for worker_id in scheduled_ids {
+        // Clear the scheduled flag first
+        {
+            let mut w = workers.write().await;
+            if let Some(worker) = w.iter_mut().find(|w| w.id == worker_id) {
+                worker.restart_scheduled = false;
+            }
+        }
+        // Spawn restart task
+        let wc = workers.clone();
+        let cc = client.clone();
+        tokio::spawn(async move {
+            restart_vpn_with_cooldown(wc, worker_id, cc).await;
+        });
+    }
+}
+
+// Utility: Trigger VPN Restart via Docker with cooldown period
+async fn restart_vpn_with_cooldown(workers: Workers, worker_id: String, client: Client) {
     // Check if already restarting
     {
         let mut w = workers.write().await;
         if let Some(worker) = w.iter_mut().find(|w| w.id == worker_id) {
             if worker.restarting {
+                println!("[{}] Already restarting, skipping.", worker_id);
                 return;
             }
             worker.restarting = true;
             worker.healthy = false;
+            worker.restart_scheduled = false;
         } else {
             return;
         }
@@ -136,6 +177,11 @@ async fn restart_vpn(workers: Workers, worker_id: String, client: Client) {
 
         if health_check_worker(&worker_host, 9000, &client).await {
             println!("[{}] Health check passed.", worker_id);
+            
+            // Cooldown period: 30 detik tanpa request masuk (restarting flag masih true)
+            println!("[{}] COOLDOWN: Waiting 30 seconds before accepting traffic...", worker_id);
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            
             Ok(())
         } else {
             Err("Health check failed after restart".to_string())
@@ -150,13 +196,15 @@ async fn restart_vpn(workers: Workers, worker_id: String, client: Client) {
                 worker.failures = 0;
                 worker.healthy = true;
                 worker.restarting = false;
-                println!("[{}] HEALED: Ready for traffic.", worker_id);
+                worker.restart_scheduled = false;
+                println!("[{}] HEALED: Ready for traffic after cooldown.", worker_id);
             }
             Err(err) => {
                 eprintln!("[{}] HEAL FAILED: {}", worker_id, err);
                 // Keep unhealthy if heal failed, don't immediately retry
                 worker.healthy = false;
                 worker.restarting = false;
+                worker.restart_scheduled = false;
                 worker.failures += 1;
             }
         }
@@ -181,14 +229,15 @@ async fn handle_generate(
 ) -> Response<AppBody> {
     let max_attempts = 3;
     let mut tried_workers = HashSet::new();
+    let mut failed_workers: Vec<String> = Vec::new();
 
     for attempt in 1..=max_attempts {
-        // Pick a healthy worker
+        // Pick a healthy worker (exclude restarting and scheduled workers)
         let worker_snapshot = {
             let w = workers.read().await;
             let healthy: Vec<Worker> = w
                 .iter()
-                .filter(|w| w.healthy && !tried_workers.contains(&w.id))
+                .filter(|w| w.healthy && !w.restarting && !w.restart_scheduled && !tried_workers.contains(&w.id))
                 .cloned()
                 .collect();
             healthy
@@ -227,6 +276,27 @@ async fn handle_generate(
                 if status == StatusCode::OK {
                     match result.bytes().await {
                         Ok(data) => {
+                            // SUCCESS! Schedule restart for all failed workers
+                            println!(
+                                "Request succeeded on {} after {} failed attempt(s). Scheduling restart for: {:?}",
+                                worker.id,
+                                failed_workers.len(),
+                                failed_workers
+                            );
+                            for failed_id in failed_workers {
+                                let wc = workers.clone();
+                                let wid = failed_id;
+                                tokio::spawn(async move {
+                                    schedule_restart(wc, wid).await;
+                                });
+                            }
+                            // Execute scheduled restarts
+                            let wc = workers.clone();
+                            let cc = client.clone();
+                            tokio::spawn(async move {
+                                execute_scheduled_restarts(wc, cc).await;
+                            });
+                            
                             return Response::builder()
                                 .status(200)
                                 .header("Content-Type", "application/json")
@@ -236,10 +306,7 @@ async fn handle_generate(
                         }
                         Err(e) => {
                             eprintln!("[{}] Failed to read response body: {}", worker.id, e);
-                            let wc = workers.clone();
-                            let cc = client.clone();
-                            let wid = worker.id.clone();
-                            tokio::spawn(async move { restart_vpn(wc, wid, cc).await });
+                            failed_workers.push(worker.id.clone());
                             continue;
                         }
                     }
@@ -264,19 +331,16 @@ async fn handle_generate(
                     if status.as_u16() >= 500 || status == StatusCode::TOO_MANY_REQUESTS || is_critical
                     {
                         eprintln!(
-                            "[{}] Failed with {} (Critical: {}). Triggering heal.",
+                            "[{}] Failed with {} (Critical: {}). Will retry next worker.",
                             worker.id,
                             status.as_u16(),
                             is_critical
                         );
-                        let wc = workers.clone();
-                        let cc = client.clone();
-                        let wid = worker.id.clone();
-                        tokio::spawn(async move { restart_vpn(wc, wid, cc).await });
+                        failed_workers.push(worker.id.clone());
                         continue;
                     }
 
-                    // Regular 4xx — return to user
+                    // Regular 4xx — return to user (no restart scheduled)
                     return Response::builder()
                         .status(status)
                         .header("Content-Type", "application/json")
@@ -287,16 +351,18 @@ async fn handle_generate(
             }
             Err(err) => {
                 eprintln!("[{}] Network Error: {}", worker.id, err);
-                let wc = workers.clone();
-                let cc = client.clone();
-                let wid = worker.id.clone();
-                tokio::spawn(async move { restart_vpn(wc, wid, cc).await });
+                failed_workers.push(worker.id.clone());
                 continue;
             }
         }
     }
 
-    // All attempts failed
+    // All attempts failed - NO restart, just return error
+    eprintln!(
+        "All {} attempts failed. Workers tried: {:?}. No restart triggered.",
+        tried_workers.len(),
+        tried_workers
+    );
     let body = serde_json::json!({
         "error": "Service Unavailable",
         "detail": "All instances failed or busy."
@@ -417,13 +483,19 @@ async fn handle_tunnel(
                         );
                     } else {
                         eprintln!(
-                            "[{}] Silent Failure Detected (Invalid response length). Estimated={:?}, Real={:?}. Triggering heal.",
+                            "[{}] Silent Failure Detected (Invalid response length). Estimated={:?}, Real={:?}. Scheduling restart.",
                             worker.id, estimated_length, real_length
                         );
+                        // Schedule restart for this worker (will execute after this request completes)
                         let wc = workers.clone();
-                        let cc = client.clone();
                         let wid = worker.id.clone();
-                        tokio::spawn(async move { restart_vpn(wc, wid, cc).await });
+                        tokio::spawn(async move {
+                            schedule_restart(wc, wid).await;
+                            // Execute immediately for tunnel requests
+                            let wc2 = wc.clone();
+                            let cc = client.clone();
+                            execute_scheduled_restarts(wc2, cc).await;
+                        });
 
                         let body = serde_json::json!({
                             "error": "Stream Blocked",
@@ -589,6 +661,7 @@ async fn main() {
             control_port: 8000,
             healthy: true,
             restarting: false,
+            restart_scheduled: false,
             failures: 0,
         });
     }
