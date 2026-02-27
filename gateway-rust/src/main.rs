@@ -1,4 +1,3 @@
-use base64::Engine;
 use bollard::Docker;
 use bytes::Bytes;
 use futures_util::StreamExt;
@@ -489,12 +488,11 @@ async fn handle_tunnel(
                         // Schedule restart for this worker (will execute after this request completes)
                         let wc = workers.clone();
                         let wid = worker.id.clone();
+                        let cc = client.clone();
                         tokio::spawn(async move {
-                            schedule_restart(wc, wid).await;
+                            schedule_restart(wc.clone(), wid).await;
                             // Execute immediately for tunnel requests
-                            let wc2 = wc.clone();
-                            let cc = client.clone();
-                            execute_scheduled_restarts(wc2, cc).await;
+                            execute_scheduled_restarts(wc, cc).await;
                         });
 
                         let body = serde_json::json!({
