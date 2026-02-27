@@ -93,27 +93,42 @@ async fn restart_vpn(workers: Workers, worker_id: String, client: Client) {
         }
     }
 
-    // Map worker_id to container name (w1 -> gluetun-1, w2 -> gluetun-2, etc.)
-    let container_name = format!("gluetun-{}", &worker_id[1..]);
+    // Map worker_id to container names (w1 -> gluetun-1 & cobalt-api-1)
+    let gluetun_name = format!("gluetun-{}", &worker_id[1..]);
+    let cobalt_name = format!("cobalt-api-{}", &worker_id[1..]);
 
-    println!("[{}] HEALING: Restarting container '{}'...", worker_id, container_name);
+    println!("[{}] HEALING: Restarting containers '{}' and '{}'...", worker_id, gluetun_name, cobalt_name);
 
     let result: Result<(), String> = async {
         // Connect to Docker daemon
         let docker = Docker::connect_with_socket_defaults()
             .map_err(|e| format!("Failed to connect to Docker: {}", e))?;
 
-        // Restart container
+        // Restart gluetun container first
+        println!("[{}] Restarting gluetun container '{}'...", worker_id, gluetun_name);
         docker
-            .restart_container(&container_name, None)
+            .restart_container(&gluetun_name, None)
             .await
-            .map_err(|e| format!("Failed to restart container: {}", e))?;
+            .map_err(|e| format!("Failed to restart gluetun container: {}", e))?;
 
-        println!("[{}] Container '{}' restarted successfully.", worker_id, container_name);
+        println!("[{}] Gluetun container '{}' restarted successfully.", worker_id, gluetun_name);
 
-        // Wait for initial container startup
+        // Wait for gluetun to initialize VPN connection
         println!("[{}] Waiting for VPN to stabilize...", worker_id);
         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+
+        // Restart cobalt-api container to ensure network namespace sync
+        println!("[{}] Restarting cobalt-api container '{}' to sync network namespace...", worker_id, cobalt_name);
+        docker
+            .restart_container(&cobalt_name, None)
+            .await
+            .map_err(|e| format!("Failed to restart cobalt-api container: {}", e))?;
+
+        println!("[{}] Cobalt-api container '{}' restarted successfully.", worker_id, cobalt_name);
+
+        // Wait for cobalt-api to initialize within the network namespace
+        println!("[{}] Waiting for cobalt-api to stabilize...", worker_id);
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
         // Health check: verify the worker API is actually reachable
         let worker_host = format!("gluetun-{}", &worker_id[1..]);
