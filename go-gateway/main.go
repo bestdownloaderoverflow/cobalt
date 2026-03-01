@@ -6,11 +6,15 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
@@ -60,9 +64,16 @@ var (
 
 func init() {
 	httpClient = &http.Client{
-		Timeout:   60 * time.Second,
+		Timeout: 0, // No global timeout, use context for per-request control
 		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:        100,
 			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
 		},
 	}
 
@@ -105,7 +116,6 @@ func healthCheckWorker(host string, port uint16) bool {
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			cancel()
-			fmt.Printf("[%s] Health check attempt %d failed: %v\n", host, attempt, err)
 			time.Sleep(3 * time.Second)
 			continue
 		}
@@ -114,7 +124,6 @@ func healthCheckWorker(host string, port uint16) bool {
 		cancel()
 
 		if err != nil {
-			fmt.Printf("[%s] Health check attempt %d failed: %v\n", host, attempt, err)
 			time.Sleep(3 * time.Second)
 			continue
 		}
@@ -125,6 +134,7 @@ func healthCheckWorker(host string, port uint16) bool {
 		}
 		time.Sleep(3 * time.Second)
 	}
+	fmt.Printf("[%s] Health check failed after 15 attempts\n", host)
 	return false
 }
 
@@ -173,73 +183,54 @@ func (w *Workers) executeScheduledRestarts() {
 
 // restartVPNWithCooldown restarts a VPN container with cooldown
 func restartVPNWithCooldown(w *Workers, workerID string) {
-	// Check if already restarting
 	w.mu.Lock()
-	for _, worker := range w.workers {
-		if worker.ID == workerID {
-			if worker.Restarting {
-				fmt.Printf("[%s] Already restarting, skipping.\n", workerID)
-				w.mu.Unlock()
-				return
-			}
-			worker.Restarting = true
-			worker.Healthy = false
-			worker.RestartScheduled = false
+	var worker *Worker
+	for _, wkr := range w.workers {
+		if wkr.ID == workerID {
+			worker = wkr
 			break
 		}
 	}
+	if worker == nil || worker.Restarting {
+		w.mu.Unlock()
+		return
+	}
+	worker.Restarting = true
+	worker.Healthy = false
+	worker.RestartScheduled = false
 	w.mu.Unlock()
 
-	// Map worker_id to container names (w1 -> gluetun-1 & cobalt-api-1)
 	gluetunName := fmt.Sprintf("gluetun-%s", workerID[1:])
 	cobaltName := fmt.Sprintf("cobalt-api-%s", workerID[1:])
 
-	fmt.Printf("[%s] HEALING: Restarting containers '%s' and '%s'...\n", workerID, gluetunName, cobaltName)
+	fmt.Printf("[%s] Restarting containers...\n", workerID)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		fmt.Printf("[%s] HEAL FAILED: Failed to connect to Docker: %v\n", workerID, err)
+		fmt.Printf("[%s] Docker connect failed: %v\n", workerID, err)
 		w.markRestartFailed(workerID)
 		return
 	}
 	defer dockerClient.Close()
 
-	// Restart gluetun container first
-	fmt.Printf("[%s] Restarting gluetun container '%s'...\n", workerID, gluetunName)
 	if err := dockerClient.ContainerRestart(ctx, gluetunName, container.StopOptions{}); err != nil {
-		fmt.Printf("[%s] HEAL FAILED: Failed to restart gluetun container: %v\n", workerID, err)
+		fmt.Printf("[%s] Gluetun restart failed: %v\n", workerID, err)
 		w.markRestartFailed(workerID)
 		return
 	}
-	fmt.Printf("[%s] Gluetun container '%s' restarted successfully.\n", workerID, gluetunName)
-
-	// Wait for gluetun to initialize VPN connection
-	fmt.Printf("[%s] Waiting for VPN to stabilize...\n", workerID)
 	time.Sleep(10 * time.Second)
 
-	// Restart cobalt-api container to ensure network namespace sync
-	fmt.Printf("[%s] Restarting cobalt-api container '%s' to sync network namespace...\n", workerID, cobaltName)
 	if err := dockerClient.ContainerRestart(ctx, cobaltName, container.StopOptions{}); err != nil {
-		fmt.Printf("[%s] HEAL FAILED: Failed to restart cobalt-api container: %v\n", workerID, err)
+		fmt.Printf("[%s] Cobalt restart failed: %v\n", workerID, err)
 		w.markRestartFailed(workerID)
 		return
 	}
-	fmt.Printf("[%s] Cobalt-api container '%s' restarted successfully.\n", workerID, cobaltName)
-
-	// Wait for cobalt-api to initialize within the network namespace
-	fmt.Printf("[%s] Waiting for cobalt-api to stabilize...\n", workerID)
 	time.Sleep(5 * time.Second)
 
-	// Health check: verify the worker API is actually reachable
 	workerHost := fmt.Sprintf("gluetun-%s", workerID[1:])
-	fmt.Printf("[%s] Running health check...\n", workerID)
-
 	if healthCheckWorker(workerHost, 9000) {
-		fmt.Printf("[%s] Health check passed.\n", workerID)
-
-		// Cooldown period: 30 seconds without incoming traffic (restarting flag still true)
-		fmt.Printf("[%s] COOLDOWN: Waiting 30 seconds before accepting traffic...\n", workerID)
 		time.Sleep(30 * time.Second)
 
 		w.mu.Lock()
@@ -253,9 +244,9 @@ func restartVPNWithCooldown(w *Workers, workerID string) {
 			}
 		}
 		w.mu.Unlock()
-		fmt.Printf("[%s] HEALED: Ready for traffic after cooldown.\n", workerID)
+		fmt.Printf("[%s] Healed\n", workerID)
 	} else {
-		fmt.Printf("[%s] HEAL FAILED: Health check failed after restart\n", workerID)
+		fmt.Printf("[%s] Health check failed after restart\n", workerID)
 		w.markRestartFailed(workerID)
 	}
 }
@@ -310,6 +301,8 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	triedWorkers := make(map[string]bool)
 	var failedWorkers []string
 
+	// Limit request body size to prevent OOM
+	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024) // 10MB limit
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -329,8 +322,6 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		worker := workerSnapshot[rand.Intn(len(workerSnapshot))]
 		triedWorkers[worker.ID] = true
 
-		fmt.Printf("Routing Generate Request to %s (Attempt %d)\n", worker.ID, attempt)
-
 		upstreamURL := fmt.Sprintf("http://%s:%d/", worker.Host, worker.APIPort)
 
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -347,7 +338,6 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		resp, err := httpClient.Do(req)
 		if err != nil {
 			cancel()
-			fmt.Printf("[%s] Network Error: %v\n", worker.ID, err)
 			failedWorkers = append(failedWorkers, worker.ID)
 			continue
 		}
@@ -360,19 +350,17 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 			cancel()
 
 			if err != nil {
-				fmt.Printf("[%s] Failed to read response body: %v\n", worker.ID, err)
 				failedWorkers = append(failedWorkers, worker.ID)
 				continue
 			}
 
-			// SUCCESS! Schedule restart for all failed workers
-			fmt.Printf("Request succeeded on %s after %d failed attempt(s). Scheduling restart for: %v\n",
-				worker.ID, len(failedWorkers), failedWorkers)
-
-			for _, failedID := range failedWorkers {
-				workers.scheduleRestart(failedID)
+			if len(failedWorkers) > 0 {
+				fmt.Printf("[%s] Success after %d failures, restarting: %v\n", worker.ID, len(failedWorkers), failedWorkers)
+				for _, failedID := range failedWorkers {
+					workers.scheduleRestart(failedID)
+				}
+				go workers.executeScheduledRestarts()
 			}
-			go workers.executeScheduledRestarts()
 
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -381,12 +369,10 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Read response body for error analysis
 		responseBody, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		cancel()
 
-		// Check for critical errors
 		isCritical := false
 		var errResp ErrorResponse
 		if err := json.Unmarshal(responseBody, &errResp); err == nil && errResp.Error != nil {
@@ -397,12 +383,10 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if status >= 500 || status == http.StatusTooManyRequests || isCritical {
-			fmt.Printf("[%s] Failed with %d (Critical: %v). Will retry next worker.\n", worker.ID, status, isCritical)
 			failedWorkers = append(failedWorkers, worker.ID)
 			continue
 		}
 
-		// Regular 4xx — return to user (no restart scheduled)
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(status)
@@ -410,8 +394,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// All attempts failed - NO restart, just return error
-	fmt.Printf("All %d attempts failed. Workers tried: %v. No restart triggered.\n", len(triedWorkers), triedWorkers)
+	fmt.Printf("All attempts failed: %v\n", triedWorkers)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusServiceUnavailable)
@@ -444,23 +427,18 @@ func handleTunnel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("Sticky Route: Tunnel %s -> %s\n", idParam, worker.ID)
-
-	// Build upstream URL preserving original path and query
 	upstreamURL := fmt.Sprintf("http://%s:%d%s", worker.Host, worker.APIPort, r.URL.RequestURI())
 
-	// Forward request
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", upstreamURL, nil)
 	if err != nil {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		http.Error(w, "Bad Gateway - Worker might be restarting", http.StatusBadGateway)
+		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
 
-	// Forward headers
 	for key, values := range r.Header {
 		if strings.ToLower(key) == "host" {
 			continue
@@ -472,16 +450,14 @@ func handleTunnel(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		fmt.Printf("[%s] Tunnel Error: %v\n", worker.ID, err)
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		http.Error(w, "Bad Gateway - Worker might be restarting", http.StatusBadGateway)
+		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 
 	upstreamStatus := resp.StatusCode
 
-	// Check for "Silent Failure" using robust length check
 	if upstreamStatus == http.StatusOK {
 		estimatedLength := parseLengthHeader(resp.Header.Get("estimated-content-length"))
 		realLength := parseLengthHeader(resp.Header.Get("content-length"))
@@ -497,28 +473,20 @@ func handleTunnel(w http.ResponseWriter, r *http.Request) {
 			isSilentFailure = realLength == nil || *realLength == 0 || *realLength == -1
 		}
 
-		if isSilentFailure {
-			if serviceParam == "tiktok" {
-				fmt.Printf("[%s] Silent Failure Detected but ignored for tiktok.\n", worker.ID)
-			} else {
-				fmt.Printf("[%s] Silent Failure Detected (Invalid response length). Estimated=%v, Real=%v. Scheduling restart.\n",
-					worker.ID, estimatedLength, realLength)
+		if isSilentFailure && serviceParam != "tiktok" {
+			go func() {
+				workers.scheduleRestart(worker.ID)
+				workers.executeScheduledRestarts()
+			}()
 
-				// Schedule restart for this worker
-				go func() {
-					workers.scheduleRestart(worker.ID)
-					workers.executeScheduledRestarts()
-				}()
-
-				w.Header().Set("Content-Type", "application/json")
-				w.Header().Set("Access-Control-Allow-Origin", "*")
-				w.WriteHeader(http.StatusBadGateway)
-				json.NewEncoder(w).Encode(map[string]string{
-					"error":  "Stream Blocked",
-					"detail": "Origin worker returned invalid content length. Worker is restarting.",
-				})
-				return
-			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error":  "Stream Blocked",
+				"detail": "Invalid content length",
+			})
+			return
 		}
 	}
 
@@ -531,8 +499,24 @@ func handleTunnel(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(upstreamStatus)
 
-	// Stream the body
-	io.Copy(w, resp.Body)
+	// Flush headers immediately for streaming
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+
+	// Stream the body with client disconnect detection
+	done := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(w, resp.Body)
+		done <- err
+	}()
+
+	select {
+	case <-done:
+		// Normal completion
+	case <-r.Context().Done():
+		resp.Body.Close()
+	}
 }
 
 // urlDecodeParams decodes URL query parameters
@@ -599,7 +583,24 @@ func main() {
 		Handler: mux,
 	}
 
-	if err := server.ListenAndServe(); err != nil {
-		fmt.Printf("Server error: %v\n", err)
+	// Setup graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			fmt.Printf("Server error: %v\n", err)
+		}
+	}()
+
+	<-ctx.Done()
+	fmt.Println("\nShutting down gracefully...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		fmt.Printf("Shutdown error: %v\n", err)
 	}
+	fmt.Println("Server stopped.")
 }
