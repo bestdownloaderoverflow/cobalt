@@ -377,9 +377,12 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		var errResp ErrorResponse
 		if err := json.Unmarshal(responseBody, &errResp); err == nil && errResp.Error != nil {
 			code := errResp.Error.Code
+			fmt.Printf("[%s] Cobalt error: %s\n", worker.ID, code)
 			if code == "error.api.fetch.critical" || code == "error.api.fetch.fail" || code == "error.api.youtube.login" {
 				isCritical = true
 			}
+		} else if status >= 400 {
+			fmt.Printf("[%s] Cobalt HTTP error: %d, body: %s\n", worker.ID, status, string(responseBody))
 		}
 
 		if status >= 500 || status == http.StatusTooManyRequests || isCritical {
@@ -507,13 +510,22 @@ func handleTunnel(w http.ResponseWriter, r *http.Request) {
 	// Stream the body with client disconnect detection
 	done := make(chan error, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Handle panic from writing to closed/invalid ResponseWriter
+				done <- fmt.Errorf("stream panic: %v", r)
+			}
+		}()
 		_, err := io.Copy(w, resp.Body)
 		done <- err
 	}()
 
 	select {
-	case <-done:
-		// Normal completion
+	case err := <-done:
+		if err != nil {
+			fmt.Printf("[%s] Stream error: %v\n", workerPrefix, err)
+		}
+		// Normal completion or error
 	case <-r.Context().Done():
 		resp.Body.Close()
 	}
