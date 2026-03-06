@@ -23,10 +23,12 @@ import (
 
 // Configuration
 const (
-	GatewayPort = 9111
-	WorkerCount = 5
-	AuthUser    = "admin"
-	AuthPass    = "secretpassword"
+	GatewayPort           = 9111
+	WorkerCount           = 5
+	AuthUser              = "admin"
+	AuthPass              = "secretpassword"
+	UptimeRestartInterval = 24 * time.Hour // Restart instances after 24h of uptime
+	UptimeCheckInterval   = 1 * time.Minute // Check uptime every minute
 )
 
 // Worker represents a cobalt-api worker instance
@@ -39,6 +41,8 @@ type Worker struct {
 	Restarting       bool
 	RestartScheduled bool
 	Failures         uint32
+	StartedAt        time.Time // When the container was last started
+	ActiveRequests   int32     // Number of active requests being processed
 }
 
 // Workers is the thread-safe worker registry
@@ -79,6 +83,7 @@ func init() {
 
 	// Initialize workers
 	workerList := make([]*Worker, 0, WorkerCount)
+	now := time.Now()
 	for i := 1; i <= WorkerCount; i++ {
 		workerList = append(workerList, &Worker{
 			ID:               fmt.Sprintf("w%d", i),
@@ -89,6 +94,8 @@ func init() {
 			Restarting:       false,
 			RestartScheduled: false,
 			Failures:         0,
+			StartedAt:        now,
+			ActiveRequests:   0,
 		})
 	}
 	workers = &Workers{workers: workerList}
@@ -240,6 +247,7 @@ func restartVPNWithCooldown(w *Workers, workerID string) {
 				worker.Healthy = true
 				worker.Restarting = false
 				worker.RestartScheduled = false
+				worker.StartedAt = time.Now() // Reset uptime timer after successful restart
 				break
 			}
 		}
@@ -295,6 +303,127 @@ func (w *Workers) findWorkerByID(id string) *Worker {
 	return nil
 }
 
+// incrementActiveRequests increments the active request counter for a worker
+func (w *Workers) incrementActiveRequests(workerID string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, worker := range w.workers {
+		if worker.ID == workerID {
+			worker.ActiveRequests++
+			break
+		}
+	}
+}
+
+// decrementActiveRequests decrements the active request counter for a worker
+func (w *Workers) decrementActiveRequests(workerID string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, worker := range w.workers {
+		if worker.ID == workerID {
+			if worker.ActiveRequests > 0 {
+				worker.ActiveRequests--
+			}
+			break
+		}
+	}
+}
+
+// isWorkerIdle checks if a worker has no active requests
+func (w *Workers) isWorkerIdle(workerID string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	for _, worker := range w.workers {
+		if worker.ID == workerID {
+			return worker.ActiveRequests == 0
+		}
+	}
+	return false
+}
+
+// getWorkersNeedingUptimeRestart returns workers that have been running for 24h+
+func (w *Workers) getWorkersNeedingUptimeRestart() []string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	var needingRestart []string
+	for _, worker := range w.workers {
+		uptime := time.Since(worker.StartedAt)
+		if uptime >= UptimeRestartInterval &&
+			worker.Healthy &&
+			!worker.Restarting &&
+			!worker.RestartScheduled {
+			needingRestart = append(needingRestart, worker.ID)
+		}
+	}
+	return needingRestart
+}
+
+// resetStartedAt resets the StartedAt timestamp for a worker after restart
+func (w *Workers) resetStartedAt(workerID string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, worker := range w.workers {
+		if worker.ID == workerID {
+			worker.StartedAt = time.Now()
+			break
+		}
+	}
+}
+
+// uptimeRestartChecker runs periodically to check for instances needing 24h restart
+func uptimeRestartChecker(ctx context.Context) {
+	ticker := time.NewTicker(UptimeCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			checkAndScheduleUptimeRestarts()
+		}
+	}
+}
+
+// checkAndScheduleUptimeRestarts checks for workers needing restart and schedules them sequentially
+func checkAndScheduleUptimeRestarts() {
+	needingRestart := workers.getWorkersNeedingUptimeRestart()
+
+	if len(needingRestart) == 0 {
+		return
+	}
+
+	fmt.Printf("[Uptime] Found %d worker(s) needing 24h restart: %v\n", len(needingRestart), needingRestart)
+
+	// Process one worker at a time (sequential restart)
+	for _, workerID := range needingRestart {
+		// Wait for worker to be idle
+		maxWait := 5 * time.Minute
+		waitStart := time.Now()
+
+		for {
+			if workers.isWorkerIdle(workerID) {
+				break
+			}
+
+			if time.Since(waitStart) > maxWait {
+				fmt.Printf("[Uptime] Worker %s still has active requests after %v, will retry later\n", workerID, maxWait)
+				return
+			}
+
+			time.Sleep(5 * time.Second)
+		}
+
+		fmt.Printf("[Uptime] Scheduling restart for worker %s (24h uptime reached)\n", workerID)
+		workers.scheduleRestart(workerID)
+		workers.executeScheduledRestarts()
+
+		// Wait for the restart to complete before processing next worker
+		time.Sleep(60 * time.Second)
+	}
+}
+
 // handleGenerate handles POST / requests (generate link)
 func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	maxAttempts := 3
@@ -322,12 +451,16 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		worker := workerSnapshot[rand.Intn(len(workerSnapshot))]
 		triedWorkers[worker.ID] = true
 
+		// Track active request
+		workers.incrementActiveRequests(worker.ID)
+
 		upstreamURL := fmt.Sprintf("http://%s:%d/", worker.Host, worker.APIPort)
 
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		req, err := http.NewRequestWithContext(ctx, "POST", upstreamURL, strings.NewReader(string(bodyBytes)))
 		if err != nil {
 			cancel()
+			workers.decrementActiveRequests(worker.ID)
 			failedWorkers = append(failedWorkers, worker.ID)
 			continue
 		}
@@ -338,6 +471,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		resp, err := httpClient.Do(req)
 		if err != nil {
 			cancel()
+			workers.decrementActiveRequests(worker.ID)
 			failedWorkers = append(failedWorkers, worker.ID)
 			continue
 		}
@@ -348,6 +482,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 			data, err := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			cancel()
+			workers.decrementActiveRequests(worker.ID)
 
 			if err != nil {
 				failedWorkers = append(failedWorkers, worker.ID)
@@ -372,6 +507,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		responseBody, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		cancel()
+		workers.decrementActiveRequests(worker.ID)
 
 		isCritical := false
 		var errResp ErrorResponse
@@ -429,6 +565,10 @@ func handleTunnel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Worker not found for this ID", http.StatusNotFound)
 		return
 	}
+
+	// Track active request
+	workers.incrementActiveRequests(worker.ID)
+	defer workers.decrementActiveRequests(worker.ID)
 
 	upstreamURL := fmt.Sprintf("http://%s:%d%s", worker.Host, worker.APIPort, r.URL.RequestURI())
 
@@ -598,6 +738,10 @@ func main() {
 	// Setup graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Start uptime checker for 24h scheduled restarts
+	go uptimeRestartChecker(ctx)
+	fmt.Printf("Uptime restart checker started (interval: %v, threshold: %v)\n", UptimeCheckInterval, UptimeRestartInterval)
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
