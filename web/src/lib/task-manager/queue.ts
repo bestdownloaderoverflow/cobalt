@@ -88,12 +88,12 @@ const makeAudioArgs = (info: CobaltLocalProcessingResponse) => {
         ffargs.push(
             "-map", "0",
             "-map", "1",
+            // always encode cover to mjpeg for mp3 to ensure proper mimetype
+            // this fixes "No mimetype is known for stream" errors
+            "-c:v", "mjpeg",
             ...(info.audio.cropCover ? [
-                "-c:v", "mjpeg",
                 "-vf", "scale=-1:720,crop=720:720",
-            ] : [
-                "-c:v", "copy",
-            ]),
+            ] : []),
         );
     } else {
         ffargs.push("-vn");
