@@ -98,22 +98,6 @@ let poModule;
 const cloneInnertube = async (customFetch, useSession) => {
     Platform.shim.eval = youtubeEval;
 
-    if (env.ytGeneratePoTokens) {
-        if (!poModule) {
-            // Importing this helper also needs BGUtils and JSDOM,
-            // I'm importing them dynamically here so a) startup
-            // doesn't get delayed and b) so I can mark these
-            // dependencies as optional
-            poModule = await import("../helpers/youtube-po.js");
-        }
-
-        if (!poMinter || +new Date() > poMinterLastRefresh + MINTER_REFRESH_PERIOD) {
-            poMinter?.then(minter => minter.remove()).catch(() => {});
-            poMinter = poModule.getMinter({ fetch: customFetch });
-            poMinterLastRefresh = +new Date();
-        }
-    }
-
     const shouldRefreshPlayer = globalThis.FORCE_RESET_INNERTUBE_PLAYER || lastRefreshedAt + PLAYER_REFRESH_PERIOD < new Date();
 
     const rawCookie = getCookie('youtube');
@@ -140,6 +124,20 @@ const cloneInnertube = async (customFetch, useSession) => {
         });
 
         if (env.ytGeneratePoTokens) {
+            if (!poModule) {
+                // Importing this helper also needs BGUtils and JSDOM,
+                // I'm importing them dynamically here so a) startup
+                // doesn't get delayed and b) so I can mark these
+                // dependencies as optional
+                poModule = await import("../helpers/youtube-po.js");
+            }
+
+            if (!poMinter || +new Date() > poMinterLastRefresh + MINTER_REFRESH_PERIOD || globalThis.FORCE_RESET_INNERTUBE_PLAYER) {
+                poMinter?.then(minter => minter.remove()).catch(() => {});
+                poMinter = poModule.getMinter({ yt: innertube, fetch: customFetch }).catch(e => console.error("Failed getting minter:", e));
+                poMinterLastRefresh = +new Date();
+            }
+
             const { minter } = await poMinter;
             innertube.session.po_token = await minter.mintAsWebsafeString(innertube.session.context.client.visitorData);
         }
