@@ -11,7 +11,7 @@ import { getYouTubeSession } from "../helpers/youtube-session.js";
 const PLAYER_REFRESH_PERIOD = 1000 * 60 * 15; // ms
 const MINTER_REFRESH_PERIOD = 1000 * 60 * 60 * 6;
 
-let innertube, lastRefreshedAt;
+let innertube, lastRefreshedAt, innertubeRequestIp;
 let poMinter, poMinterLastRefresh = 0;
 
 const codecList = {
@@ -95,7 +95,7 @@ const fetchEncryptedHostFlags = async (fetch) => {
  */
 let poModule;
 
-const cloneInnertube = async (customFetch, useSession) => {
+const cloneInnertube = async (customFetch, useSession, requestIP) => {
     Platform.shim.eval = youtubeEval;
 
     const shouldRefreshPlayer = globalThis.FORCE_RESET_INNERTUBE_PLAYER || lastRefreshedAt + PLAYER_REFRESH_PERIOD < new Date();
@@ -142,6 +142,7 @@ const cloneInnertube = async (customFetch, useSession) => {
             innertube.session.po_token = await minter.mintAsWebsafeString(innertube.session.context.client.visitorData);
         }
 
+        innertubeRequestIp = requestIP;
         lastRefreshedAt = +new Date();
         
         if (!useSession && env.customInnertubeClient === "WEB_EMBEDDED") {
@@ -159,7 +160,7 @@ const cloneInnertube = async (customFetch, useSession) => {
         innertube.session.config_data,
         innertube.session.player,
         cookie,
-        customFetch ?? innertube.session.http.fetch,
+        innertube.session.http.fetch_function,
         innertube.session.cache,
         innertube.session.po_token ?? sessionTokens?.potoken
     );
@@ -340,7 +341,8 @@ export default async function (o) {
                 ...init,
                 dispatcher: o.dispatcher
             }),
-            useSession
+            useSession,
+            o.requestIP,
         );
     } catch (e) {
         if (e === "no_session_tokens") {
@@ -719,6 +721,7 @@ export default async function (o) {
             bestAudio,
             isHLS: useHLS,
             originalRequest,
+            requestIP: innertubeRequestIp,
 
             cover,
             cropCover: basicInfo.author.endsWith("- Topic"),
@@ -766,7 +769,8 @@ export default async function (o) {
             filenameAttributes,
             fileMetadata,
             isHLS: useHLS,
-            originalRequest
+            originalRequest,
+            requestIP: innertubeRequestIp,
         }
     }
 

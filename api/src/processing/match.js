@@ -141,6 +141,7 @@ export default async function match({ host, patternMatch, params, authType, retr
                     youtubeHLS,
                     subtitleLang,
                     alwaysProxy: params.alwaysProxy,
+                    requestIP,
                 }
 
                 if (url.hostname === "music.youtube.com" || isAudioOnly) {
@@ -360,7 +361,7 @@ export default async function match({ host, patternMatch, params, authType, retr
             disableMetadata: params.disableMetadata,
             filenameStyle: params.filenameStyle,
             convertGif: params.convertGif,
-            requestIP,
+            requestIP: r.requestIP ?? requestIP,
             proxyToUse,
             audioBitrate: params.audioBitrate,
             alwaysProxy: params.alwaysProxy || localProcessing === "forced",
