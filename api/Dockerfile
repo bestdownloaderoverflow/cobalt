@@ -11,8 +11,8 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY api/package.json ./api/
 COPY packages/version-info/ ./packages/version-info/
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile --prod
+# Install dependencies (don't use --prod because youtubei.js from git needs to build)
+RUN pnpm install --frozen-lockfile
 
 # Copy API source code
 COPY api/src ./api/src
