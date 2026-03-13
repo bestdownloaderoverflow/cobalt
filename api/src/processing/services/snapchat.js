@@ -2,7 +2,6 @@ import { resolveRedirectingURL } from "../url.js";
 import { genericUserAgent } from "../../config.js";
 import { createStream } from "../../stream/manage.js";
 
-const SPOTLIGHT_VIDEO_REGEX = /<link data-react-helmet="true" rel="preload" href="([^"]+)" as="video"\/>/;
 const NEXT_DATA_REGEX = /<script id="__NEXT_DATA__" type="application\/json">({.+})<\/script><\/body><\/html>$/;
 
 async function getSpotlight(id) {
@@ -14,7 +13,11 @@ async function getSpotlight(id) {
         return { error: "fetch.fail" };
     }
 
-    const videoURL = html.match(SPOTLIGHT_VIDEO_REGEX)?.[1];
+    const nextDataString = html.match(NEXT_DATA_REGEX)?.[1];
+    if (!nextDataString) return;
+
+    const data = JSON.parse(nextDataString);
+    const videoURL = data?.props?.pageProps?.videoMetadata?.contentUrl;
 
     if (videoURL && new URL(videoURL).hostname.endsWith(".sc-cdn.net")) {
         return {
