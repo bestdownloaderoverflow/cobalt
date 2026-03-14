@@ -1,7 +1,7 @@
 {
     "name": "@imput/cobalt-api",
     "description": "save what you love",
-    "version": "11.5",
+    "version": "11.6",
     "author": "imput",
     "exports": "./src/cobalt.js",
     "type": "module",
@@ -23,30 +23,31 @@
     },
     "homepage": "https://github.com/imputnet/cobalt#readme",
     "dependencies": {
-        "@datastructures-js/priority-queue": "^6.3.1",
+        "@datastructures-js/priority-queue": "^6.3.5",
         "@imput/psl": "^2.0.4",
         "@imput/version-info": "workspace:^",
         "content-disposition-header": "0.6.0",
         "cors": "^2.8.5",
-        "dotenv": "^16.0.1",
-        "express": "^4.21.2",
-        "express-rate-limit": "^7.4.1",
+        "dotenv": "^17.2.3",
+        "express": "^4.22.1",
+        "express-rate-limit": "^8.2.1",
         "ffmpeg-static": "^5.3.0",
-        "hls-parser": "^0.10.7",
-        "ipaddr.js": "2.2.0",
-        "mime": "^4.0.4",
-        "nanoid": "^5.0.9",
-        "set-cookie-parser": "2.6.0",
-        "undici": "^6.21.3",
+        "hls-parser": "^0.16.0",
+        "ipaddr.js": "2.3.0",
+        "isolated-vm": "^6.0.2",
+        "mime": "^4.1.0",
+        "nanoid": "^5.1.6",
+        "set-cookie-parser": "2.7.2",
+        "undici": "^6.22.0",
         "url-pattern": "1.0.3",
         "youtubei.js": "github:LuanRT/YouTube.js#0449b65495963f1a85b0a68ff6ef1013886ccda0",
-        "zod": "^3.23.8"
+        "zod": "^4.2.1"
     },
     "optionalDependencies": {
         "bgutils-js": "^3.2.0",
         "freebind": "^0.2.2",
         "jsdom": "^27.3.0",
-        "rate-limit-redis": "^4.2.0",
-        "redis": "^4.7.0"
+        "rate-limit-redis": "^4.3.1",
+        "redis": "^4.7.1"
     }
 }

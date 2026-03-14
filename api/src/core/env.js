@@ -109,9 +109,9 @@ export const loadEnvs = (env = process.env) => {
         jwtLifetime: env.JWT_EXPIRY || 120,
 
         sessionEnabled: env.TURNSTILE_SITEKEY
-            && env.TURNSTILE_SECRET
-            && env.JWT_SECRET
-            && !env.MEOWING_SESSION_REQUIRED_FOR,
+                            && env.TURNSTILE_SECRET
+                            && env.JWT_SECRET
+                            && !env.MEOWING_SESSION_REQUIRED_FOR,
 
         sessionRequiredCIDRs: env.MEOWING_SESSION_REQUIRED_FOR?.split(",")
             .map(cidr => ipaddr.parseCIDR(cidr)),
@@ -132,7 +132,7 @@ export const loadEnvs = (env = process.env) => {
         ytSessionReloadInterval: 300,
         ytSessionInnertubeClient: env.YOUTUBE_SESSION_INNERTUBE_CLIENT,
         ytAllowBetterAudio: env.YOUTUBE_ALLOW_BETTER_AUDIO !== "0",
-        ytPlayerId: env.YOUTUBE_PLAYER_ID,
+        ytPlayerIds: env.YOUTUBE_PLAYER_ID?.split(',')?.map(p => p.trim()),
         ytGeneratePoTokens: env.YOUTUBE_GENERATE_PO_TOKENS !== "0",
 
         // "never" | "session" | "always"

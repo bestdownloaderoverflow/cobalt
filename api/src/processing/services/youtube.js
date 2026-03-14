@@ -1,12 +1,39 @@
 import HLS from "hls-parser";
+import ivm from "isolated-vm";
 
-import { Innertube, Session, UniversalCache, Platform } from "youtubei.js";
-import vm from 'node:vm';
+import { fetch, Request } from "undici";
+import { Innertube, Platform, Session, UniversalCache } from "youtubei.js";
 
 import { env } from "../../config.js";
 import { getCookie } from "../cookie/manager.js";
 import { createStream } from "../../stream/manage.js";
 import { getYouTubeSession } from "../helpers/youtube-session.js";
+
+// https://github.com/LuanRT/YouTube.js/pull/1052
+Platform.shim.eval = async (data, envData) => {
+  const isolate = new ivm.Isolate();
+
+  try {
+    const context = await isolate.createContext();
+    const jail = context.global;
+    const properties = [];
+
+    if (envData.n) {
+      await jail.set('__n_input', envData.n);
+      properties.push('n: exportedVars.nFunction(__n_input)');
+    }
+    if (envData.sig) {
+      await jail.set('__sig_input', envData.sig);
+      properties.push('sig: exportedVars.sigFunction(__sig_input)');
+    }
+
+    const code = `${data.output}\n({ ${properties.join(', ')} })`;
+    const script = await isolate.compileScript(code);
+    return await script.run(context, { copy: true, timeout: 5000 });
+  } finally {
+    isolate.dispose();
+  }
+}
 
 const PLAYER_REFRESH_PERIOD = 1000 * 60 * 15; // ms
 const MINTER_REFRESH_PERIOD = 1000 * 60 * 60 * 6;
@@ -51,28 +78,6 @@ const videoQualities = [144, 240, 360, 480, 720, 1080, 1440, 2160, 4320];
 
 let unavailableResponses = 0;
 
-// https://ytjs.dev/guide/getting-started.html#providing-a-custom-javascript-interpreter
-const youtubeEval = async (data, env) => {
-    const properties = [];
-
-    if (env.n) {
-        properties.push(`n: exportedVars.nFunction("${env.n}")`)
-    }
-
-    if (env.sig) {
-        properties.push(`sig: exportedVars.sigFunction("${env.sig}")`)
-    }
-
-    const code = `${data.output}\nconst result = { ${properties.join(', ')} }; result`;
-
-    // I'm aware that node's vms are very easy to escape and I
-    // probably shouldn't use it here to run arbitrary code
-    // fetched from Google - but I kinda trust them
-    // also no idea if im using this correctly
-    return vm.runInNewContext(code);
-}
-
-
 let encryptedHostFlags = "";
 const fetchEncryptedHostFlags = async (fetch) => {
     const embedResp = await fetch("https://youtube.com/embed/QfKmnuHMpYo", {
@@ -96,8 +101,6 @@ const fetchEncryptedHostFlags = async (fetch) => {
 let poModule;
 
 const cloneInnertube = async (customFetch, useSession, requestIP) => {
-    Platform.shim.eval = youtubeEval;
-
     const shouldRefreshPlayer = globalThis.FORCE_RESET_INNERTUBE_PLAYER || lastRefreshedAt + PLAYER_REFRESH_PERIOD < new Date();
 
     const rawCookie = getCookie('youtube');
@@ -112,6 +115,13 @@ const cloneInnertube = async (customFetch, useSession, requestIP) => {
 
     if (!innertube || shouldRefreshPlayer) {
         globalThis.FORCE_RESET_INNERTUBE_PLAYER = false;
+        let player_id;
+        if (env.ytPlayerIds) {
+            player_id = env.ytPlayerIds[
+                Math.floor(Math.random() * env.ytPlayerIds.length)
+            ];
+        }
+
         innertube = await Innertube.create({
             cache: new UniversalCache(false),
             fetch: customFetch,
@@ -120,7 +130,7 @@ const cloneInnertube = async (customFetch, useSession, requestIP) => {
             po_token: useSession ? sessionTokens?.potoken : undefined,
             visitor_data: useSession ? sessionTokens?.visitor_data : undefined,
             enable_session_cache: false,
-            player_id: env.ytPlayerId,
+            player_id,
         });
 
         if (env.ytGeneratePoTokens) {
@@ -337,10 +347,24 @@ export default async function (o) {
     let yt;
     try {
         yt = await cloneInnertube(
-            (input, init) => fetch(input, {
-                ...init,
-                dispatcher: o.dispatcher
-            }),
+            (input, init) => {
+                const url = typeof input === 'string'
+                          ? new URL(input)
+                          : input instanceof URL
+                            ? input
+                            : new URL(input.url);
+
+                const request = new Request(
+                    url,
+                    input instanceof Platform.shim.Request
+                    ? input : undefined
+                );
+
+                return fetch(request, {
+                    ...init,
+                    dispatcher: o.dispatcher
+                });
+            },
             useSession,
             o.requestIP,
         );
