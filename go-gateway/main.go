@@ -514,7 +514,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(responseBody, &errResp); err == nil && errResp.Error != nil {
 			code := errResp.Error.Code
 			fmt.Printf("[%s] Cobalt error: %s\n", worker.ID, code)
-			if code == "error.api.fetch.critical" || code == "error.api.fetch.fail" || code == "error.api.youtube.login" {
+			if code == "error.api.fetch.critical" || code == "error.api.fetch.fail" {
 				isCritical = true
 			}
 		} else if status >= 400 {
