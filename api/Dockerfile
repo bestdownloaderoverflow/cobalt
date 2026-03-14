@@ -8,6 +8,7 @@ RUN apk add --no-cache python3 make g++ ffmpeg git
 
 # Copy workspace files
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY patches/ ./patches/
 COPY api/package.json ./api/
 COPY packages/version-info/ ./packages/version-info/
 
